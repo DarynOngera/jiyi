@@ -4,7 +4,15 @@ defmodule Jiyi.RetrievalTest do
   alias Jiyi.Retrieval
 
   setup do
-    start_supervised!(Jiyi.Retrieval.Supervisor)
+    if Process.whereis(Jiyi.Repo) do
+      :ok = Ecto.Adapters.SQL.Sandbox.checkout(Jiyi.Repo)
+      Ecto.Adapters.SQL.Sandbox.mode(Jiyi.Repo, {:shared, self()})
+    end
+
+    unless Process.whereis(Jiyi.Retrieval.Supervisor) do
+      start_supervised!(Jiyi.Retrieval.Supervisor)
+    end
+
     :ok
   end
 

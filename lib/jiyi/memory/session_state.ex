@@ -45,11 +45,11 @@ defmodule Jiyi.Memory.SessionState do
 
   @impl true
   def handle_call({:get, key}, _from, state) do
-    {:reply, Map.get(state.data, key), state}
+    {:reply, Map.get(state.data, to_string(key)), state}
   end
 
   def handle_call({:put, key, value}, _from, state) do
-    new_data = Map.put(state.data, key, value)
+    new_data = Map.put(state.data, to_string(key), value)
     writes = state.writes + 1
     state = %{state | data: new_data, dirty: true, writes: writes}
 

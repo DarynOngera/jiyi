@@ -68,20 +68,26 @@ defmodule Jiyi.Memory.SemanticStore do
     else
       changeset = SemanticFact.changeset(%SemanticFact{}, attrs)
 
-      case Repo.insert(changeset, on_conflict: :nothing, conflict_target: :content_hash) do
-        {:ok, fact} ->
-          :telemetry.execute([:jiyi, :memory, :write], %{count: 1}, %{
-            store: :semantic,
-            id: fact.id
-          })
+      case Repo.get_by(SemanticFact, content_hash: content_hash) do
+        nil ->
+          case Repo.insert(changeset) do
+            {:ok, fact} ->
+              :telemetry.execute([:jiyi, :memory, :write], %{count: 1}, %{
+                store: :semantic,
+                id: fact.id
+              })
 
-          {:ok, fact.id}
+              {:ok, fact.id}
 
-        {:error, _changeset} ->
-          case Repo.get_by(SemanticFact, content_hash: content_hash) do
-            nil -> {:error, :insert_failed}
-            fact -> {:duplicate, fact.id}
+            {:error, _} ->
+              case Repo.get_by(SemanticFact, content_hash: content_hash) do
+                nil -> {:error, :insert_failed}
+                fact -> {:duplicate, fact.id}
+              end
           end
+
+        fact ->
+          {:duplicate, fact.id}
       end
     end
   end

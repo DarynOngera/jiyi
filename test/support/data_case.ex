@@ -19,10 +19,10 @@ defmodule Jiyi.DataCase do
   end
 
   setup tags do
-    pid = Sandbox.checkout(Jiyi.Repo)
+    :ok = Sandbox.checkout(Jiyi.Repo)
 
     unless tags[:async] do
-      Sandbox.mode(Jiyi.Repo, {:shared, pid})
+      Sandbox.mode(Jiyi.Repo, {:shared, self()})
     end
 
     :ok

@@ -62,20 +62,26 @@ defmodule Jiyi.Memory.EpisodicStore do
     else
       changeset = EpisodicEvent.changeset(%EpisodicEvent{}, attrs)
 
-      case Repo.insert(changeset, on_conflict: :nothing, conflict_target: :content_hash) do
-        {:ok, event} ->
-          :telemetry.execute([:jiyi, :memory, :write], %{count: 1}, %{
-            store: :episodic,
-            id: event.id
-          })
+      case Repo.get_by(EpisodicEvent, content_hash: content_hash) do
+        nil ->
+          case Repo.insert(changeset) do
+            {:ok, event} ->
+              :telemetry.execute([:jiyi, :memory, :write], %{count: 1}, %{
+                store: :episodic,
+                id: event.id
+              })
 
-          {:ok, event.id}
+              {:ok, event.id}
 
-        {:error, _changeset} ->
-          case Repo.get_by(EpisodicEvent, content_hash: content_hash) do
-            nil -> {:error, :insert_failed}
-            event -> {:duplicate, event.id}
+            {:error, _} ->
+              case Repo.get_by(EpisodicEvent, content_hash: content_hash) do
+                nil -> {:error, :insert_failed}
+                event -> {:duplicate, event.id}
+              end
           end
+
+        event ->
+          {:duplicate, event.id}
       end
     end
   end
