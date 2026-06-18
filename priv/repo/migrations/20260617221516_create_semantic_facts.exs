@@ -31,6 +31,6 @@ defmodule Jiyi.Repo.Migrations.CreateSemanticFacts do
     )
 
     create(index(:semantic_facts, [:subject, :predicate]))
-    create(unique_index(:semantic_facts, [:content_hash]))
+    create(index(:semantic_facts, [:content_hash]))
   end
 end

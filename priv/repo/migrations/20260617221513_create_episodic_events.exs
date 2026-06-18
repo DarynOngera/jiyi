@@ -29,6 +29,6 @@ defmodule Jiyi.Repo.Migrations.CreateEpisodicEvents do
     )
 
     create(index(:episodic_events, [:agent_id, :occurred_at]))
-    create(unique_index(:episodic_events, [:content_hash]))
+    create(index(:episodic_events, [:content_hash]))
   end
 end

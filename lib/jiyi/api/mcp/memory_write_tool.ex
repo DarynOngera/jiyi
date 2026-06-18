@@ -16,24 +16,37 @@ defmodule Jiyi.API.MCP.MemoryWriteTool do
     end
 
     field(:scope, {:required, :string})
+    field(:api_token, {:required, :string})
   end
 
   @impl Hermes.Server.Component.Tool
   def execute(args, _frame) do
-    request = %{
-      type: args["type"],
-      agent_id: args["agent_id"],
-      session_id: Map.get(args, "session_id"),
-      content: args["content"],
-      provenance: args["provenance"],
-      scope: args["scope"]
-    }
+    with :ok <- authenticate(args) do
+      request = %{
+        type: args["type"],
+        agent_id: args["agent_id"],
+        session_id: Map.get(args, "session_id"),
+        content: args["content"],
+        provenance: args["provenance"],
+        scope: args["scope"]
+      }
 
-    case Jiyi.write_memory(request) do
-      {:ok, id} -> {:ok, %{status: "written", id: id}}
-      {:duplicate, id} -> {:ok, %{status: "duplicate", id: id}}
-      {:quarantined, id} -> {:ok, %{status: "quarantined", id: id}}
-      {:error, reason} -> {:error, to_string(reason)}
+      case Jiyi.write_memory(request) do
+        {:ok, id} -> {:ok, %{status: "written", id: id}}
+        {:duplicate, id} -> {:ok, %{status: "duplicate", id: id}}
+        {:quarantined, id} -> {:ok, %{status: "quarantined", id: id}}
+        {:error, reason} -> {:error, to_string(reason)}
+      end
+    end
+  end
+
+  defp authenticate(args) do
+    expected = Application.fetch_env!(:jiyi, :api_token)
+
+    if args["api_token"] == expected do
+      :ok
+    else
+      {:error, "unauthorized"}
     end
   end
 end

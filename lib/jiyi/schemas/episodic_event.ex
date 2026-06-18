@@ -16,6 +16,7 @@ defmodule Jiyi.Schemas.EpisodicEvent do
     field(:trust_tier, :string)
     field(:scope, :string)
     field(:content_hash, :string)
+    field(:relevance, :float, virtual: true)
   end
 
   def changeset(event \\ %__MODULE__{}, attrs) do

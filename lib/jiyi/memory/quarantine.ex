@@ -70,56 +70,47 @@ defmodule Jiyi.Memory.Quarantine do
   def handle_call({:promote, id}, _from, state) do
     now = DateTime.utc_now()
 
-    promote_result =
+    result =
       Repo.transaction(fn ->
         entry = Repo.get!(QuarantineEntry, id)
 
         if entry.status != "pending" do
           Repo.rollback(:already_reviewed)
-        else
-          entry
-          |> QuarantineEntry.changeset(%{status: "promoted", reviewed_at: now})
-          |> Repo.update!()
         end
-      end)
 
-    result =
-      case promote_result do
-        {:ok, entry} ->
-          payload = map_keys_to_atoms(entry.payload)
+        payload = map_keys_to_atoms(entry.payload)
 
-          store_result =
-            case entry.target_table do
-              "episodic_events" ->
-                Jiyi.Memory.EpisodicStore.write(payload, bypass_quarantine: true)
+        store_result =
+          case entry.target_table do
+            "episodic_events" ->
+              Jiyi.Memory.EpisodicStore.write_logic(payload, bypass_quarantine: true)
 
-              "semantic_facts" ->
-                Jiyi.Memory.SemanticStore.write(payload, bypass_quarantine: true)
+            "semantic_facts" ->
+              Jiyi.Memory.SemanticStore.write_logic(payload, bypass_quarantine: true)
 
-              _ ->
-                {:error, :unknown_target}
-            end
-
-          case store_result do
-            {:ok, _} ->
-              store_result
-
-            {:duplicate, _} ->
-              store_result
-
-            error ->
-              Repo.transaction(fn ->
-                entry
-                |> QuarantineEntry.changeset(%{status: "pending", reviewed_at: nil})
-                |> Repo.update!()
-              end)
-
-              error
+            _ ->
+              Repo.rollback(:unknown_target)
           end
 
-        {:error, reason} ->
-          {:error, reason}
-      end
+        case store_result do
+          {:ok, _} ->
+            entry
+            |> QuarantineEntry.changeset(%{status: "promoted", reviewed_at: now})
+            |> Repo.update!()
+
+            store_result
+
+          {:duplicate, _} ->
+            entry
+            |> QuarantineEntry.changeset(%{status: "promoted", reviewed_at: now})
+            |> Repo.update!()
+
+            store_result
+
+          error ->
+            Repo.rollback(error)
+        end
+      end)
 
     {:reply, result, state}
   end

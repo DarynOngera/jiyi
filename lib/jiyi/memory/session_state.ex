@@ -36,6 +36,10 @@ defmodule Jiyi.Memory.SessionState do
           %{session_id: session_id, data: %{}, dirty: false, writes: 0}
 
         checkpoint ->
+          :telemetry.execute([:jiyi, :session, :restart], %{count: 1}, %{
+            session_id: session_id
+          })
+
           %{session_id: session_id, data: checkpoint.working_memory, dirty: false, writes: 0}
       end
 

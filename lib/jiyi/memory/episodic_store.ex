@@ -30,7 +30,7 @@ defmodule Jiyi.Memory.EpisodicStore do
 
   @impl true
   def handle_call({:write, attrs, opts}, _from, state) do
-    result = do_write(attrs, opts)
+    result = write_logic(attrs, opts)
     {:reply, result, state}
   end
 
@@ -39,7 +39,7 @@ defmodule Jiyi.Memory.EpisodicStore do
     {:reply, events, state}
   end
 
-  defp do_write(attrs, opts) do
+  def write_logic(attrs, opts \\ []) do
     now = DateTime.utc_now()
 
     content = normalize_content(attrs)
@@ -58,7 +58,10 @@ defmodule Jiyi.Memory.EpisodicStore do
     else
       changeset = EpisodicEvent.changeset(%EpisodicEvent{}, attrs)
 
-      case Repo.get_by(EpisodicEvent, content_hash: content_hash) do
+      window = Application.fetch_env!(:jiyi, :dedup_window_seconds)
+      window_start = DateTime.add(now, -window, :second)
+
+      case recent_duplicate(content_hash, window_start) do
         nil ->
           case Repo.insert(changeset) do
             {:ok, event} ->
@@ -70,13 +73,18 @@ defmodule Jiyi.Memory.EpisodicStore do
               {:ok, event.id}
 
             {:error, _} ->
-              case Repo.get_by(EpisodicEvent, content_hash: content_hash) do
+              case recent_duplicate(content_hash, window_start) do
                 nil -> {:error, :insert_failed}
                 event -> {:duplicate, event.id}
               end
           end
 
         event ->
+          :telemetry.execute([:jiyi, :memory, :duplicate], %{count: 1}, %{
+            store: :episodic,
+            id: event.id
+          })
+
           {:duplicate, event.id}
       end
     end
@@ -87,8 +95,29 @@ defmodule Jiyi.Memory.EpisodicStore do
 
     EpisodicEvent
     |> filter_query(filters)
+    |> select_relevance(filters)
     |> limit(^limit)
     |> Repo.all()
+    |> tap(fn _ ->
+      :telemetry.execute([:jiyi, :memory, :read], %{count: 1}, %{store: :episodic})
+    end)
+  end
+
+  defp select_relevance(query, filters) do
+    case Keyword.get(filters, :text) do
+      nil ->
+        query
+
+      value ->
+        select_merge(query, [e], %{
+          relevance:
+            fragment(
+              "ts_rank(to_tsvector('english', ?), plainto_tsquery('english', ?))",
+              e.summary,
+              ^value
+            )
+        })
+    end
   end
 
   defp filter_query(query, filters) do
@@ -96,18 +125,29 @@ defmodule Jiyi.Memory.EpisodicStore do
       {:agent_id, value}, q ->
         where(q, [e], e.agent_id == ^value)
 
+      {:scope, scopes}, q ->
+        scope_filter(q, scopes)
+
       {:occurred_after, value}, q ->
         where(q, [e], e.occurred_at > ^value)
 
       {:text, value}, q ->
-        where(
-          q,
+        q
+        |> where(
           [e],
           fragment(
             "to_tsvector('english', ?) @@ plainto_tsquery('english', ?)",
             e.summary,
             ^value
           )
+        )
+        |> order_by([e],
+          desc:
+            fragment(
+              "ts_rank(to_tsvector('english', ?), plainto_tsquery('english', ?))",
+              e.summary,
+              ^value
+            )
         )
 
       {:embedding, value}, q ->
@@ -118,6 +158,35 @@ defmodule Jiyi.Memory.EpisodicStore do
     end)
   end
 
+  defp scope_filter(query, %{agent_id: agent_id, scopes: scopes}) do
+    condition =
+      Enum.reduce(scopes, false, fn scope, dynamic ->
+        case scope do
+          "agent_private" ->
+            dynamic([e], ^dynamic or (e.scope == "agent_private" and e.agent_id == ^agent_id))
+
+          "session_shared" ->
+            dynamic([e], ^dynamic or (e.scope == "session_shared" and e.agent_id == ^agent_id))
+
+          "org_shared" ->
+            dynamic([e], ^dynamic or e.scope == "org_shared")
+
+          _ ->
+            dynamic
+        end
+      end)
+
+    where(query, ^condition)
+  end
+
+  defp recent_duplicate(content_hash, window_start) do
+    Repo.one(
+      from(e in EpisodicEvent,
+        where: e.content_hash == ^content_hash and e.occurred_at > ^window_start
+      )
+    )
+  end
+
   defp normalize_content(%{summary: summary}), do: String.downcase(String.trim(summary))
   defp normalize_content(_), do: ""
 
@@ -125,5 +194,8 @@ defmodule Jiyi.Memory.EpisodicStore do
     Map.get(attrs, :trust_tier) == "external_untrusted" or anomaly?(attrs)
   end
 
-  defp anomaly?(_attrs), do: false
+  defp anomaly?(attrs) do
+    summary = Map.get(attrs, :summary, "")
+    Jiyi.Anomaly.Detector.instruction_like?(summary)
+  end
 end

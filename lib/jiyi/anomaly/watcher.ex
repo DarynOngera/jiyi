@@ -68,29 +68,11 @@ defmodule Jiyi.Anomaly.Watcher do
     :timer.send_interval(60_000, self(), :scan)
   end
 
-  defp anomalous?(%EpisodicEvent{summary: summary}), do: instruction_like?(summary)
+  defp anomalous?(%EpisodicEvent{summary: summary}),
+    do: Jiyi.Anomaly.Detector.instruction_like?(summary)
 
   defp anomalous?(%SemanticFact{subject: s, predicate: p, object: o}),
-    do: instruction_like?(s <> " " <> p <> " " <> o)
-
-  defp instruction_like?(text) when is_binary(text) do
-    lower = String.downcase(text)
-
-    patterns = [
-      "ignore previous",
-      "disregard",
-      "forget",
-      "you must",
-      "do not mention",
-      "do not reveal",
-      "system prompt",
-      "ignore the above"
-    ]
-
-    Enum.any?(patterns, &String.contains?(lower, &1))
-  end
-
-  defp instruction_like?(_), do: false
+    do: Jiyi.Anomaly.Detector.instruction_like?(s <> " " <> p <> " " <> o)
 
   defp serialize(%EpisodicEvent{} = event) do
     Map.from_struct(event)

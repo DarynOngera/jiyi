@@ -20,9 +20,9 @@ defmodule Jiyi.Memory.SessionSupervisor do
 
   def start_session(session_id) when is_binary(session_id) do
     spec = %{
-      id: {Jiyi.Memory.SessionState, session_id},
-      start: {Jiyi.Memory.SessionState, :start_link, [session_id]},
-      restart: :transient
+      id: {Jiyi.Memory.SessionRootSupervisor, session_id},
+      start: {Jiyi.Memory.SessionRootSupervisor, :start_link, [session_id]},
+      restart: :temporary
     }
 
     DynamicSupervisor.start_child(__MODULE__, spec)

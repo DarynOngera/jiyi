@@ -34,7 +34,7 @@ defmodule Jiyi.Memory.SemanticStore do
 
   @impl true
   def handle_call({:write, attrs, opts}, _from, state) do
-    result = do_write(attrs, opts)
+    result = write_logic(attrs, opts)
     {:reply, result, state}
   end
 
@@ -48,7 +48,7 @@ defmodule Jiyi.Memory.SemanticStore do
     {:reply, result, state}
   end
 
-  defp do_write(attrs, opts) do
+  def write_logic(attrs, opts \\ []) do
     now = DateTime.utc_now()
 
     content = normalize_content(attrs)
@@ -68,7 +68,10 @@ defmodule Jiyi.Memory.SemanticStore do
     else
       changeset = SemanticFact.changeset(%SemanticFact{}, attrs)
 
-      case Repo.get_by(SemanticFact, content_hash: content_hash) do
+      window = Application.fetch_env!(:jiyi, :dedup_window_seconds)
+      window_start = DateTime.add(now, -window, :second)
+
+      case recent_duplicate(content_hash, window_start) do
         nil ->
           case Repo.insert(changeset) do
             {:ok, fact} ->
@@ -80,13 +83,18 @@ defmodule Jiyi.Memory.SemanticStore do
               {:ok, fact.id}
 
             {:error, _} ->
-              case Repo.get_by(SemanticFact, content_hash: content_hash) do
+              case recent_duplicate(content_hash, window_start) do
                 nil -> {:error, :insert_failed}
                 fact -> {:duplicate, fact.id}
               end
           end
 
         fact ->
+          :telemetry.execute([:jiyi, :memory, :duplicate], %{count: 1}, %{
+            store: :semantic,
+            id: fact.id
+          })
+
           {:duplicate, fact.id}
       end
     end
@@ -97,9 +105,32 @@ defmodule Jiyi.Memory.SemanticStore do
 
     SemanticFact
     |> filter_query(filters)
+    |> select_relevance(filters)
     |> where([f], is_nil(f.valid_until))
     |> limit(^limit)
     |> Repo.all()
+    |> tap(fn _ ->
+      :telemetry.execute([:jiyi, :memory, :read], %{count: 1}, %{store: :semantic})
+    end)
+  end
+
+  defp select_relevance(query, filters) do
+    case Keyword.get(filters, :text) do
+      nil ->
+        query
+
+      value ->
+        select_merge(query, [f], %{
+          relevance:
+            fragment(
+              "ts_rank(to_tsvector('english', ? || ' ' || ? || ' ' || ?), plainto_tsquery('english', ?))",
+              f.subject,
+              f.predicate,
+              f.object,
+              ^value
+            )
+        })
+    end
   end
 
   defp filter_query(query, filters) do
@@ -113,9 +144,12 @@ defmodule Jiyi.Memory.SemanticStore do
       {:object, value}, q ->
         where(q, [f], f.object == ^value)
 
+      {:scope, scopes}, q ->
+        scope_filter(q, scopes)
+
       {:text, value}, q ->
-        where(
-          q,
+        q
+        |> where(
           [f],
           fragment(
             "to_tsvector('english', ? || ' ' || ? || ' ' || ?) @@ plainto_tsquery('english', ?)",
@@ -125,6 +159,16 @@ defmodule Jiyi.Memory.SemanticStore do
             ^value
           )
         )
+        |> order_by([f],
+          desc:
+            fragment(
+              "ts_rank(to_tsvector('english', ? || ' ' || ? || ' ' || ?), plainto_tsquery('english', ?))",
+              f.subject,
+              f.predicate,
+              f.object,
+              ^value
+            )
+        )
 
       {:embedding, value}, q ->
         order_by(q, [f], fragment("? <-> ?", f.embedding, ^Pgvector.new(value)))
@@ -132,6 +176,37 @@ defmodule Jiyi.Memory.SemanticStore do
       _, q ->
         q
     end)
+  end
+
+  defp scope_filter(query, %{agent_id: agent_id, scopes: scopes}) do
+    condition =
+      Enum.reduce(scopes, false, fn scope, dynamic ->
+        case scope do
+          "agent_private" ->
+            dynamic([f], ^dynamic or (f.scope == "agent_private" and f.agent_id == ^agent_id))
+
+          "session_shared" ->
+            dynamic([f], ^dynamic or (f.scope == "session_shared" and f.agent_id == ^agent_id))
+
+          "org_shared" ->
+            dynamic([f], ^dynamic or f.scope == "org_shared")
+
+          _ ->
+            dynamic
+        end
+      end)
+
+    where(query, ^condition)
+  end
+
+  defp recent_duplicate(content_hash, window_start) do
+    Repo.one(
+      from(f in SemanticFact,
+        where:
+          f.content_hash == ^content_hash and f.learned_at > ^window_start and
+            is_nil(f.valid_until)
+      )
+    )
   end
 
   defp do_invalidate(fact_id, at) do
@@ -162,5 +237,10 @@ defmodule Jiyi.Memory.SemanticStore do
     Map.get(attrs, :trust_tier) == "external_untrusted" or anomaly?(attrs)
   end
 
-  defp anomaly?(_attrs), do: false
+  defp anomaly?(attrs) do
+    text =
+      "#{Map.get(attrs, :subject, "")} #{Map.get(attrs, :predicate, "")} #{Map.get(attrs, :object, "")}"
+
+    Jiyi.Anomaly.Detector.instruction_like?(text)
+  end
 end

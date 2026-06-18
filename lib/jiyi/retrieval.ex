@@ -13,6 +13,8 @@ defmodule Jiyi.Retrieval do
 
     ranked = rank(episodic ++ semantic ++ working ++ procedural, request)
     compressed = compress(ranked, request)
+
+    emit_stage(:format, length(compressed))
     format(compressed, request)
   end
 
@@ -26,13 +28,22 @@ defmodule Jiyi.Retrieval do
     )
   end
 
-  defp fan_out(%{task: task} = request) do
+  defp fan_out(%{task: task, agent_id: agent_id, memory_scopes: scopes} = request) do
+    emit_stage(:fan_out, 0)
+    scope_filter = %{agent_id: agent_id, scopes: scopes}
+
     tasks = [
       Task.Supervisor.async(Jiyi.Retrieval.TaskSupervisor, fn ->
-        {:episodic, safe_query(fn -> EpisodicStore.query([text: task], limit: 10) end)}
+        {:episodic,
+         safe_query(fn ->
+           EpisodicStore.query([text: task, scope: scope_filter], limit: 10)
+         end)}
       end),
       Task.Supervisor.async(Jiyi.Retrieval.TaskSupervisor, fn ->
-        {:semantic, safe_query(fn -> SemanticStore.query([text: task], limit: 10) end)}
+        {:semantic,
+         safe_query(fn ->
+           SemanticStore.query([text: task, scope: scope_filter], limit: 10)
+         end)}
       end),
       Task.Supervisor.async(Jiyi.Retrieval.TaskSupervisor, fn ->
         {:working, safe_query(fn -> fetch_working_memory(request) end)}
@@ -108,24 +119,42 @@ defmodule Jiyi.Retrieval do
   end
 
   defp rank(items, _request) do
+    emit_stage(:rank, length(items))
     Enum.sort_by(items, &score/1, :desc)
   end
 
-  defp score(%EpisodicEvent{trust_tier: tier}), do: score_tier(tier)
-  defp score(%SemanticFact{trust_tier: tier}), do: score_tier(tier)
-  defp score(%{trust_tier: "human_asserted"}), do: 1.0
-  defp score(%{trust_tier: "agent_derived"}), do: 0.7
-  defp score(%{trust_tier: "external_untrusted"}), do: 0.3
-  defp score(%{type: :working}), do: 0.95
-  defp score(%{type: :procedural}), do: 0.85
-  defp score(_), do: 0.5
+  defp score(item) do
+    base_score(item) * recency_multiplier(item) * relevance_multiplier(item)
+  end
+
+  defp base_score(%EpisodicEvent{trust_tier: tier}), do: score_tier(tier)
+  defp base_score(%SemanticFact{trust_tier: tier}), do: score_tier(tier)
+  defp base_score(%{trust_tier: "human_asserted"}), do: 1.0
+  defp base_score(%{trust_tier: "agent_derived"}), do: 0.7
+  defp base_score(%{trust_tier: "external_untrusted"}), do: 0.3
+  defp base_score(%{type: :working}), do: 0.95
+  defp base_score(%{type: :procedural}), do: 0.85
+  defp base_score(_), do: 0.5
 
   defp score_tier("human_asserted"), do: 1.0
   defp score_tier("agent_derived"), do: 0.7
   defp score_tier("external_untrusted"), do: 0.3
   defp score_tier(_), do: 0.5
 
+  defp recency_multiplier(%{occurred_at: dt}), do: decay(dt)
+  defp recency_multiplier(%{valid_from: dt}), do: decay(dt)
+  defp recency_multiplier(_), do: 1.0
+
+  defp decay(dt) do
+    age_hours = max(0, DateTime.diff(DateTime.utc_now(), dt, :hour))
+    max(0.1, 1.0 - age_hours / 168.0)
+  end
+
+  defp relevance_multiplier(%{relevance: r}) when is_float(r) and r > 0, do: max(0.1, r)
+  defp relevance_multiplier(_), do: 1.0
+
   defp compress(items, request) do
+    emit_stage(:compress, length(items))
     budget = request.token_budget
     # Naive token estimation: 1 token ~= 4 chars of English text.
     char_budget = budget * 4
@@ -194,5 +223,9 @@ defmodule Jiyi.Retrieval do
 
   defp estimate_tokens(text) do
     div(String.length(text), 4)
+  end
+
+  defp emit_stage(stage, count) do
+    :telemetry.execute([:jiyi, :retrieval, :stage], %{count: count}, %{stage: stage})
   end
 end

@@ -7,7 +7,7 @@ defmodule Jiyi do
 
   def write_memory(%{type: "episodic"} = request) do
     case Map.fetch(request, :session_id) do
-      {:ok, session_id} ->
+      {:ok, session_id} when is_binary(session_id) ->
         attrs =
           %{
             agent_id: request.agent_id,
@@ -23,7 +23,7 @@ defmodule Jiyi do
 
         EpisodicStore.write(attrs)
 
-      :error ->
+      _ ->
         {:error, :missing_session_id}
     end
   end
@@ -47,7 +47,7 @@ defmodule Jiyi do
 
   def write_memory(%{type: "working"} = request) do
     case Map.fetch(request, :session_id) do
-      {:ok, session_id} ->
+      {:ok, session_id} when is_binary(session_id) ->
         content = request.content
 
         with {:ok, _pid} <- ensure_session(session_id),
@@ -55,7 +55,7 @@ defmodule Jiyi do
           {:ok, session_id}
         end
 
-      :error ->
+      _ ->
         {:error, :missing_session_id}
     end
   end
