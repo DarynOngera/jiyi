@@ -6,6 +6,7 @@ defmodule Jiyi.Schemas.EpisodicEvent do
   schema "episodic_events" do
     field(:agent_id, :string)
     field(:session_id, :string)
+    field(:org_id, :string)
     field(:occurred_at, :utc_datetime_usec)
     field(:summary, :string)
     field(:embedding, Pgvector.Ecto.Vector)
@@ -24,6 +25,7 @@ defmodule Jiyi.Schemas.EpisodicEvent do
     |> cast(attrs, [
       :agent_id,
       :session_id,
+      :org_id,
       :occurred_at,
       :summary,
       :embedding,
