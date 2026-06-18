@@ -1,14 +1,10 @@
 defmodule Jiyi.API.RouterTest do
-  use ExUnit.Case
+  use Jiyi.DataCase
 
   alias Jiyi.API.Router
+  alias Jiyi.Schemas.AgentKey
 
   setup do
-    if Process.whereis(Jiyi.Repo) do
-      :ok = Ecto.Adapters.SQL.Sandbox.checkout(Jiyi.Repo)
-      Ecto.Adapters.SQL.Sandbox.mode(Jiyi.Repo, {:shared, self()})
-    end
-
     unless Process.whereis(Jiyi.Retrieval.Supervisor) do
       start_supervised!(Jiyi.Retrieval.Supervisor)
     end
@@ -27,7 +23,7 @@ defmodule Jiyi.API.RouterTest do
       assert conn.status == 401
     end
 
-    test "returns 200 with valid bearer token" do
+    test "returns 200 with shared bearer token" do
       conn =
         :post
         |> Plug.Test.conn("/context/assemble", %{agent_id: "a", session_id: "s", task: "t"})
@@ -43,5 +39,66 @@ defmodule Jiyi.API.RouterTest do
                "token_count" => _
              } = Jason.decode!(conn.resp_body)
     end
+
+    test "returns 200 with per-agent key matching agent_id" do
+      agent_id = "agent-#{System.unique_integer([:positive])}"
+      token = "agent-key-#{System.unique_integer([:positive])}"
+      insert_agent_key(token, agent_id)
+
+      conn =
+        :post
+        |> Plug.Test.conn("/context/assemble", %{
+          agent_id: agent_id,
+          session_id: "s",
+          task: "t"
+        })
+        |> Plug.Conn.put_req_header("content-type", "application/json")
+        |> Plug.Conn.put_req_header("authorization", "Bearer #{token}")
+        |> Router.call([])
+
+      assert conn.status == 200
+    end
+
+    test "returns 403 when per-agent key agent_id does not match" do
+      token = "agent-key-#{System.unique_integer([:positive])}"
+      insert_agent_key(token, "agent-a")
+
+      conn =
+        :post
+        |> Plug.Test.conn("/context/assemble", %{
+          agent_id: "agent-b",
+          session_id: "s",
+          task: "t"
+        })
+        |> Plug.Conn.put_req_header("content-type", "application/json")
+        |> Plug.Conn.put_req_header("authorization", "Bearer #{token}")
+        |> Router.call([])
+
+      assert conn.status == 403
+      assert %{"error" => "agent_id_mismatch"} = Jason.decode!(conn.resp_body)
+    end
+
+    test "returns 401 for invalid token" do
+      conn =
+        :post
+        |> Plug.Test.conn("/context/assemble", %{agent_id: "a", session_id: "s", task: "t"})
+        |> Plug.Conn.put_req_header("content-type", "application/json")
+        |> Plug.Conn.put_req_header("authorization", "Bearer invalid-token")
+        |> Router.call([])
+
+      assert conn.status == 401
+    end
+  end
+
+  defp insert_agent_key(token, agent_id) do
+    hash = :crypto.hash(:sha256, token) |> Base.encode16(case: :lower)
+
+    %AgentKey{}
+    |> AgentKey.changeset(%{
+      key_hash: hash,
+      agent_id: agent_id,
+      inserted_at: DateTime.utc_now()
+    })
+    |> Jiyi.Repo.insert!()
   end
 end

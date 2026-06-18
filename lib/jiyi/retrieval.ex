@@ -3,7 +3,7 @@ defmodule Jiyi.Retrieval do
   Plain-module retrieval pipeline: route -> fan-out -> rank -> compress -> format.
   """
 
-  alias Jiyi.Memory.{EpisodicStore, SemanticStore, SessionState}
+  alias Jiyi.Memory.{EpisodicStore, Procedural, SemanticStore, SessionState}
   alias Jiyi.Schemas.{EpisodicEvent, SemanticFact}
 
   def assemble(request) do
@@ -30,7 +30,13 @@ defmodule Jiyi.Retrieval do
 
   defp fan_out(%{task: task, agent_id: agent_id, memory_scopes: scopes} = request) do
     emit_stage(:fan_out, 0)
-    scope_filter = %{agent_id: agent_id, scopes: scopes}
+
+    scope_filter = %{
+      agent_id: agent_id,
+      scopes: scopes,
+      session_id: Map.get(request, :session_id),
+      org_id: Map.get(request, :org_id)
+    }
 
     tasks = [
       Task.Supervisor.async(Jiyi.Retrieval.TaskSupervisor, fn ->
@@ -104,18 +110,12 @@ defmodule Jiyi.Retrieval do
   defp fetch_working_memory(_), do: []
 
   defp fetch_procedural(%{task: task}) do
-    path = procedural_path(task)
-
-    if path && File.exists?(path) do
-      content = File.read!(path)
-      [%{type: :procedural, content: content}]
-    else
-      []
-    end
-  end
-
-  defp procedural_path(_task) do
-    nil
+    task
+    |> Procedural.content_for_task()
+    |> Enum.with_index()
+    |> Enum.map(fn {content, index} ->
+      %{type: :procedural, content: content, id: "procedural-#{index}"}
+    end)
   end
 
   defp rank(items, _request) do
@@ -129,17 +129,28 @@ defmodule Jiyi.Retrieval do
 
   defp base_score(%EpisodicEvent{trust_tier: tier}), do: score_tier(tier)
   defp base_score(%SemanticFact{trust_tier: tier}), do: score_tier(tier)
-  defp base_score(%{trust_tier: "human_asserted"}), do: 1.0
-  defp base_score(%{trust_tier: "agent_derived"}), do: 0.7
-  defp base_score(%{trust_tier: "external_untrusted"}), do: 0.3
-  defp base_score(%{type: :working}), do: 0.95
-  defp base_score(%{type: :procedural}), do: 0.85
+  defp base_score(%{trust_tier: tier}), do: score_tier(tier)
+  defp base_score(%{type: :working}), do: type_weight(:working)
+  defp base_score(%{type: :procedural}), do: type_weight(:procedural)
   defp base_score(_), do: 0.5
 
-  defp score_tier("human_asserted"), do: 1.0
-  defp score_tier("agent_derived"), do: 0.7
-  defp score_tier("external_untrusted"), do: 0.3
-  defp score_tier(_), do: 0.5
+  defp score_tier(tier), do: Map.get(trust_tier_weights(), tier, 0.5)
+
+  defp trust_tier_weights do
+    Application.get_env(:jiyi, :retrieval_trust_tier_weights, %{
+      "human_asserted" => 1.0,
+      "agent_derived" => 0.7,
+      "external_untrusted" => 0.3
+    })
+  end
+
+  defp type_weight(type) do
+    Application.get_env(:jiyi, :retrieval_type_weights, %{
+      working: 0.95,
+      procedural: 0.85
+    })
+    |> Map.get(type, 0.85)
+  end
 
   defp recency_multiplier(%{occurred_at: dt}), do: decay(dt)
   defp recency_multiplier(%{valid_from: dt}), do: decay(dt)
@@ -147,7 +158,9 @@ defmodule Jiyi.Retrieval do
 
   defp decay(dt) do
     age_hours = max(0, DateTime.diff(DateTime.utc_now(), dt, :hour))
-    max(0.1, 1.0 - age_hours / 168.0)
+    half_life = Application.get_env(:jiyi, :retrieval_recency_half_life_hours, 1)
+    floor = Application.get_env(:jiyi, :retrieval_min_recency_multiplier, 0.1)
+    max(floor, :math.pow(0.5, age_hours / half_life))
   end
 
   defp relevance_multiplier(%{relevance: r}) when is_float(r) and r > 0, do: max(0.1, r)

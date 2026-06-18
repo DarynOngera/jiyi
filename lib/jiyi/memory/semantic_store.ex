@@ -178,18 +178,21 @@ defmodule Jiyi.Memory.SemanticStore do
     end)
   end
 
-  defp scope_filter(query, %{agent_id: agent_id, scopes: scopes}) do
+  defp scope_filter(query, %{agent_id: agent_id, scopes: scopes} = ctx) do
+    session_id = Map.get(ctx, :session_id)
+    org_id = Map.get(ctx, :org_id)
+
     condition =
       Enum.reduce(scopes, false, fn scope, dynamic ->
         case scope do
           "agent_private" ->
-            dynamic([f], ^dynamic or (f.scope == "agent_private" and f.agent_id == ^agent_id))
+            dynamic([f], ^dynamic or f.agent_id == ^agent_id)
 
-          "session_shared" ->
-            dynamic([f], ^dynamic or (f.scope == "session_shared" and f.agent_id == ^agent_id))
+          "session_shared" when is_binary(session_id) and session_id != "" ->
+            dynamic([f], ^dynamic or (f.agent_id == ^agent_id and f.session_id == ^session_id))
 
-          "org_shared" ->
-            dynamic([f], ^dynamic or f.scope == "org_shared")
+          "org_shared" when is_binary(org_id) and org_id != "" ->
+            dynamic([f], ^dynamic or f.org_id == ^org_id)
 
           _ ->
             dynamic

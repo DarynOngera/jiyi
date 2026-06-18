@@ -12,21 +12,41 @@ defmodule Jiyi.API.Router do
 
   post "/context/assemble" do
     with {:ok, request} <- validate_assemble(conn.body_params),
+         {:ok, request} <- Jiyi.Auth.authenticate(conn.assigns.api_token, request),
          result <- Jiyi.Retrieval.assemble(request) do
       send_json(conn, 200, result)
     else
-      {:error, reason} -> send_json(conn, 400, %{error: reason})
+      {:error, :agent_id_mismatch} ->
+        send_json(conn, 403, %{error: "agent_id_mismatch"})
+
+      {:error, reason} when reason in [:invalid_token, :missing_token] ->
+        send_json(conn, 401, %{error: reason})
+
+      {:error, reason} ->
+        send_json(conn, 400, %{error: reason})
     end
   end
 
   post "/memory/write" do
     with {:ok, request} <- validate_write(conn.body_params),
+         {:ok, request} <- Jiyi.Auth.authenticate(conn.assigns.api_token, request),
          {:ok, response} <- Jiyi.write_memory(request) do
       send_json(conn, 200, response)
     else
-      {:error, reason} -> send_json(conn, 400, %{error: reason})
-      {:quarantined, id} -> send_json(conn, 200, %{status: "quarantined", id: id})
-      {:duplicate, id} -> send_json(conn, 200, %{status: "duplicate", id: id})
+      {:error, :agent_id_mismatch} ->
+        send_json(conn, 403, %{error: "agent_id_mismatch"})
+
+      {:error, reason} when reason in [:invalid_token, :missing_token] ->
+        send_json(conn, 401, %{error: reason})
+
+      {:error, reason} ->
+        send_json(conn, 400, %{error: reason})
+
+      {:quarantined, id} ->
+        send_json(conn, 200, %{status: "quarantined", id: id})
+
+      {:duplicate, id} ->
+        send_json(conn, 200, %{status: "duplicate", id: id})
     end
   end
 
@@ -35,11 +55,9 @@ defmodule Jiyi.API.Router do
   end
 
   defp authenticate(conn, _opts) do
-    expected = Application.fetch_env!(:jiyi, :api_token)
-
     case get_req_header(conn, "authorization") do
-      ["Bearer " <> ^expected] ->
-        conn
+      ["Bearer " <> token] when is_binary(token) and token != "" ->
+        Plug.Conn.assign(conn, :api_token, token)
 
       _ ->
         conn
@@ -56,6 +74,7 @@ defmodule Jiyi.API.Router do
        %{
          agent_id: params["agent_id"],
          session_id: params["session_id"],
+         org_id: Map.get(params, "org_id"),
          task: params["task"],
          token_budget: Map.get(params, "token_budget", 4000),
          memory_scopes:
@@ -75,6 +94,7 @@ defmodule Jiyi.API.Router do
          type: params["type"],
          agent_id: params["agent_id"],
          session_id: Map.get(params, "session_id"),
+         org_id: Map.get(params, "org_id"),
          content: params["content"],
          provenance: params["provenance"],
          scope: params["scope"]

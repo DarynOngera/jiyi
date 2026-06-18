@@ -30,5 +30,16 @@ defmodule Jiyi.RetrievalTest do
       assert is_integer(result.token_count)
       assert result.token_count >= 0
     end
+
+    test "includes procedural memory for matching tasks" do
+      result =
+        Retrieval.assemble(%{
+          agent_id: "agent-1",
+          session_id: "session-1",
+          task: "investigate alert"
+        })
+
+      assert Enum.any?(result.sources, &(&1.type == "procedural"))
+    end
   end
 end
