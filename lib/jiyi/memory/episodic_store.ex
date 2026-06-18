@@ -166,13 +166,16 @@ defmodule Jiyi.Memory.EpisodicStore do
       Enum.reduce(scopes, false, fn scope, dynamic ->
         case scope do
           "agent_private" ->
-            dynamic([e], ^dynamic or e.agent_id == ^agent_id)
+            dynamic([e], ^dynamic or (e.scope == "agent_private" and e.agent_id == ^agent_id))
 
           "session_shared" when is_binary(session_id) and session_id != "" ->
-            dynamic([e], ^dynamic or (e.agent_id == ^agent_id and e.session_id == ^session_id))
+            dynamic(
+              [e],
+              ^dynamic or (e.scope == "session_shared" and e.session_id == ^session_id)
+            )
 
           "org_shared" when is_binary(org_id) and org_id != "" ->
-            dynamic([e], ^dynamic or e.org_id == ^org_id)
+            dynamic([e], ^dynamic or (e.scope == "org_shared" and e.org_id == ^org_id))
 
           _ ->
             dynamic

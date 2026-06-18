@@ -88,6 +88,46 @@ defmodule Jiyi.API.RouterTest do
 
       assert conn.status == 401
     end
+
+    test "issues mcp session token with shared bearer token" do
+      agent_id = "agent-#{System.unique_integer([:positive])}"
+
+      conn =
+        :post
+        |> Plug.Test.conn("/auth/mcp-token", %{agent_id: agent_id})
+        |> Plug.Conn.put_req_header("content-type", "application/json")
+        |> Plug.Conn.put_req_header("authorization", "Bearer test-token")
+        |> Router.call([])
+
+      assert conn.status == 200
+
+      assert %{
+               "token" => token,
+               "expires_in" => 300
+             } = Jason.decode!(conn.resp_body)
+
+      assert is_binary(token)
+    end
+
+    test "issues mcp session token with per-agent key" do
+      agent_id = "agent-#{System.unique_integer([:positive])}"
+      token = "agent-key-#{System.unique_integer([:positive])}"
+      insert_agent_key(token, agent_id)
+
+      conn =
+        :post
+        |> Plug.Test.conn("/auth/mcp-token", %{agent_id: agent_id})
+        |> Plug.Conn.put_req_header("content-type", "application/json")
+        |> Plug.Conn.put_req_header("authorization", "Bearer #{token}")
+        |> Router.call([])
+
+      assert conn.status == 200
+
+      assert %{
+               "token" => _,
+               "expires_in" => 300
+             } = Jason.decode!(conn.resp_body)
+    end
   end
 
   defp insert_agent_key(token, agent_id) do

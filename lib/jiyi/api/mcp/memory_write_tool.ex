@@ -17,7 +17,7 @@ defmodule Jiyi.API.MCP.MemoryWriteTool do
     end
 
     field(:scope, {:required, :string})
-    field(:api_token, {:required, :string})
+    field(:session_token, {:required, :string})
   end
 
   @impl Hermes.Server.Component.Tool
@@ -32,7 +32,7 @@ defmodule Jiyi.API.MCP.MemoryWriteTool do
       scope: args["scope"]
     }
 
-    with {:ok, request} <- Jiyi.Auth.authenticate(args["api_token"], request) do
+    with {:ok, request} <- Jiyi.Auth.authenticate_mcp(args["session_token"], request) do
       case Jiyi.write_memory(request) do
         {:ok, id} -> {:ok, %{status: "written", id: id}}
         {:duplicate, id} -> {:ok, %{status: "duplicate", id: id}}

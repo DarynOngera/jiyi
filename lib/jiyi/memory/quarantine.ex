@@ -79,6 +79,8 @@ defmodule Jiyi.Memory.Quarantine do
         end
 
         payload = map_keys_to_atoms(entry.payload)
+        content_hash = Map.get(payload, :content_hash)
+        acquire_content_hash_lock(content_hash)
 
         store_result =
           case entry.target_table do
@@ -143,4 +145,12 @@ defmodule Jiyi.Memory.Quarantine do
   end
 
   defp map_keys_to_atoms(value), do: value
+
+  defp acquire_content_hash_lock(nil), do: :ok
+
+  defp acquire_content_hash_lock(content_hash) do
+    lock_id = :erlang.phash2(content_hash)
+    Repo.query!("SELECT pg_advisory_xact_lock($1)", [lock_id])
+    :ok
+  end
 end

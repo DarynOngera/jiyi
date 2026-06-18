@@ -9,7 +9,7 @@ defmodule Jiyi.API.MCP.ContextAssembleTool do
     field(:org_id, :string)
     field(:task, {:required, :string})
     field(:token_budget, :integer, default: 4000)
-    field(:api_token, {:required, :string})
+    field(:session_token, {:required, :string})
 
     field(:memory_scopes, {:list, :string},
       default: ["agent_private", "session_shared", "org_shared"]
@@ -28,7 +28,7 @@ defmodule Jiyi.API.MCP.ContextAssembleTool do
         Map.get(args, "memory_scopes", ["agent_private", "session_shared", "org_shared"])
     }
 
-    with {:ok, request} <- Jiyi.Auth.authenticate(args["api_token"], request) do
+    with {:ok, request} <- Jiyi.Auth.authenticate_mcp(args["session_token"], request) do
       {:ok, Jiyi.Retrieval.assemble(request)}
     end
   end
