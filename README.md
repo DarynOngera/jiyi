@@ -2,6 +2,8 @@
 
 A durable, context-aware memory service for autonomous agents.
 
+> Jìyì (记忆) - Translates to personal memory from Chinese.
+
 Jiyi stores and retrieves three kinds of memory:
 
 - **Episodic events** – time-ordered observations with vector embeddings and provenance.
