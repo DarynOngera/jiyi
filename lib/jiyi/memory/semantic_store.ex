@@ -14,8 +14,8 @@ defmodule Jiyi.Memory.SemanticStore do
     GenServer.start_link(__MODULE__, init_arg, name: __MODULE__)
   end
 
-  def write(attrs) do
-    GenServer.call(__MODULE__, {:write, attrs})
+  def write(attrs, opts \\ []) do
+    GenServer.call(__MODULE__, {:write, attrs, opts})
   end
 
   def query(filters, opts \\ []) do
@@ -33,8 +33,8 @@ defmodule Jiyi.Memory.SemanticStore do
   end
 
   @impl true
-  def handle_call({:write, attrs}, _from, state) do
-    result = do_write(attrs)
+  def handle_call({:write, attrs, opts}, _from, state) do
+    result = do_write(attrs, opts)
     {:reply, result, state}
   end
 
@@ -48,7 +48,7 @@ defmodule Jiyi.Memory.SemanticStore do
     {:reply, result, state}
   end
 
-  defp do_write(attrs) do
+  defp do_write(attrs, opts) do
     now = DateTime.utc_now()
 
     content = normalize_content(attrs)
@@ -61,7 +61,7 @@ defmodule Jiyi.Memory.SemanticStore do
         valid_from: Map.get(attrs, :valid_from, now)
       })
 
-    if quarantine?(attrs) do
+    if quarantine?(attrs) and not Keyword.get(opts, :bypass_quarantine, false) do
       {:ok, id} = Jiyi.Memory.Quarantine.hold("semantic_facts", attrs, "external_untrusted")
       :telemetry.execute([:jiyi, :memory, :quarantined], %{count: 1}, %{store: :semantic})
       {:quarantined, id}

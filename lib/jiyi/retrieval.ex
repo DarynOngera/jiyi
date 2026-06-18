@@ -4,6 +4,7 @@ defmodule Jiyi.Retrieval do
   """
 
   alias Jiyi.Memory.{EpisodicStore, SemanticStore, SessionState}
+  alias Jiyi.Schemas.{EpisodicEvent, SemanticFact}
 
   def assemble(request) do
     request = normalize_request(request)
@@ -110,12 +111,19 @@ defmodule Jiyi.Retrieval do
     Enum.sort_by(items, &score/1, :desc)
   end
 
+  defp score(%EpisodicEvent{trust_tier: tier}), do: score_tier(tier)
+  defp score(%SemanticFact{trust_tier: tier}), do: score_tier(tier)
   defp score(%{trust_tier: "human_asserted"}), do: 1.0
   defp score(%{trust_tier: "agent_derived"}), do: 0.7
   defp score(%{trust_tier: "external_untrusted"}), do: 0.3
   defp score(%{type: :working}), do: 0.95
   defp score(%{type: :procedural}), do: 0.85
   defp score(_), do: 0.5
+
+  defp score_tier("human_asserted"), do: 1.0
+  defp score_tier("agent_derived"), do: 0.7
+  defp score_tier("external_untrusted"), do: 0.3
+  defp score_tier(_), do: 0.5
 
   defp compress(items, request) do
     budget = request.token_budget
@@ -146,8 +154,8 @@ defmodule Jiyi.Retrieval do
     sources =
       Enum.map(items, fn item ->
         %{
-          type: to_string(item.type),
-          id: Map.get(item, :id, "working/#{item[:key]}"),
+          type: source_type(item),
+          id: source_id(item),
           trust_tier: Map.get(item, :trust_tier, "agent_derived")
         }
       end)
@@ -159,6 +167,11 @@ defmodule Jiyi.Retrieval do
     }
   end
 
+  defp format_item(%EpisodicEvent{summary: summary}), do: "[episodic] #{summary}"
+
+  defp format_item(%SemanticFact{subject: s, predicate: p, object: o}),
+    do: "[semantic] #{s} #{p} #{o}"
+
   defp format_item(%{type: :episodic, summary: summary}), do: "[episodic] #{summary}"
 
   defp format_item(%{type: :semantic, subject: s, predicate: p, object: o}),
@@ -169,6 +182,15 @@ defmodule Jiyi.Retrieval do
 
   defp format_item(%{type: :procedural, content: content}), do: "[procedural] #{content}"
   defp format_item(_), do: ""
+
+  defp source_type(%EpisodicEvent{}), do: "episodic"
+  defp source_type(%SemanticFact{}), do: "semantic"
+  defp source_type(%{type: type}), do: to_string(type)
+
+  defp source_id(%EpisodicEvent{id: id}), do: id
+  defp source_id(%SemanticFact{id: id}), do: id
+  defp source_id(%{id: id}), do: id
+  defp source_id(%{key: key}), do: "working/#{key}"
 
   defp estimate_tokens(text) do
     div(String.length(text), 4)

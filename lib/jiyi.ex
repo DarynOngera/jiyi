@@ -6,20 +6,26 @@ defmodule Jiyi do
   alias Jiyi.Memory.{EpisodicStore, SemanticStore, SessionSupervisor, SessionState}
 
   def write_memory(%{type: "episodic"} = request) do
-    attrs =
-      %{
-        agent_id: request.agent_id,
-        session_id: Map.fetch!(request, :session_id),
-        summary: get_in(request.content, ["summary"]) || "",
-        raw_ref: get_in(request.content, ["raw_ref"]),
-        provenance_source: get_in(request.provenance, ["source"]),
-        ingestion_method: get_in(request.provenance, ["ingestion_method"]),
-        trust_tier: get_in(request.provenance, ["trust_tier"]),
-        scope: request.scope
-      }
-      |> maybe_add_embedding()
+    case Map.fetch(request, :session_id) do
+      {:ok, session_id} ->
+        attrs =
+          %{
+            agent_id: request.agent_id,
+            session_id: session_id,
+            summary: get_in(request.content, ["summary"]) || "",
+            raw_ref: get_in(request.content, ["raw_ref"]),
+            provenance_source: get_in(request.provenance, ["source"]),
+            ingestion_method: get_in(request.provenance, ["ingestion_method"]),
+            trust_tier: get_in(request.provenance, ["trust_tier"]),
+            scope: request.scope
+          }
+          |> maybe_add_embedding()
 
-    EpisodicStore.write(attrs)
+        EpisodicStore.write(attrs)
+
+      :error ->
+        {:error, :missing_session_id}
+    end
   end
 
   def write_memory(%{type: "semantic"} = request) do
@@ -40,12 +46,17 @@ defmodule Jiyi do
   end
 
   def write_memory(%{type: "working"} = request) do
-    session_id = Map.fetch!(request, :session_id)
-    content = request.content
+    case Map.fetch(request, :session_id) do
+      {:ok, session_id} ->
+        content = request.content
 
-    with {:ok, _pid} <- ensure_session(session_id),
-         :ok <- SessionState.put(session_id, :working, content) do
-      {:ok, session_id}
+        with {:ok, _pid} <- ensure_session(session_id),
+             :ok <- SessionState.put(session_id, :working, content) do
+          {:ok, session_id}
+        end
+
+      :error ->
+        {:error, :missing_session_id}
     end
   end
 

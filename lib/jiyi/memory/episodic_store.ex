@@ -14,8 +14,8 @@ defmodule Jiyi.Memory.EpisodicStore do
     GenServer.start_link(__MODULE__, init_arg, name: __MODULE__)
   end
 
-  def write(attrs) do
-    GenServer.call(__MODULE__, {:write, attrs})
+  def write(attrs, opts \\ []) do
+    GenServer.call(__MODULE__, {:write, attrs, opts})
   end
 
   def query(filters, opts \\ []) do
@@ -25,16 +25,12 @@ defmodule Jiyi.Memory.EpisodicStore do
   @impl true
   def init(_init_arg) do
     Process.set_label(__MODULE__)
-
-    :ok =
-      :telemetry.execute([:jiyi, :memory, :read], %{count: 0}, %{store: :episodic, event: :init})
-
-    {:ok, %{recent_hashes: %{}}}
+    {:ok, %{}}
   end
 
   @impl true
-  def handle_call({:write, attrs}, _from, state) do
-    result = do_write(attrs, state)
+  def handle_call({:write, attrs, opts}, _from, state) do
+    result = do_write(attrs, opts)
     {:reply, result, state}
   end
 
@@ -43,7 +39,7 @@ defmodule Jiyi.Memory.EpisodicStore do
     {:reply, events, state}
   end
 
-  defp do_write(attrs, _state) do
+  defp do_write(attrs, opts) do
     now = DateTime.utc_now()
 
     content = normalize_content(attrs)
@@ -55,7 +51,7 @@ defmodule Jiyi.Memory.EpisodicStore do
         occurred_at: Map.get(attrs, :occurred_at, now)
       })
 
-    if quarantine?(attrs) do
+    if quarantine?(attrs) and not Keyword.get(opts, :bypass_quarantine, false) do
       {:ok, id} = Jiyi.Memory.Quarantine.hold("episodic_events", attrs, "external_untrusted")
       :telemetry.execute([:jiyi, :memory, :quarantined], %{count: 1}, %{store: :episodic})
       {:quarantined, id}

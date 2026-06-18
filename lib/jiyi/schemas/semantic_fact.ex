@@ -12,6 +12,7 @@ defmodule Jiyi.Schemas.SemanticFact do
     field(:valid_until, :utc_datetime_usec)
     field(:learned_at, :utc_datetime_usec)
 
+    field(:agent_id, :string)
     field(:provenance_source, :string)
     field(:ingestion_method, :string)
     field(:trust_tier, :string)
@@ -29,6 +30,7 @@ defmodule Jiyi.Schemas.SemanticFact do
       :valid_from,
       :valid_until,
       :learned_at,
+      :agent_id,
       :provenance_source,
       :ingestion_method,
       :trust_tier,
@@ -41,6 +43,7 @@ defmodule Jiyi.Schemas.SemanticFact do
       :object,
       :valid_from,
       :learned_at,
+      :agent_id,
       :provenance_source,
       :ingestion_method,
       :trust_tier,

@@ -14,6 +14,7 @@ defmodule Jiyi.Repo.Migrations.CreateSemanticFacts do
       add(:valid_until, :timestamptz)
       add(:learned_at, :timestamptz, null: false)
 
+      add(:agent_id, :text, null: false)
       add(:provenance_source, :text, null: false)
       add(:ingestion_method, :text, null: false)
       add(:trust_tier, :text, null: false)

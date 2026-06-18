@@ -27,7 +27,6 @@ defmodule Jiyi.Anomaly.Watcher do
   @impl true
   def handle_info(:scan, state) do
     do_scan()
-    schedule_scan()
     {:noreply, state}
   end
 
