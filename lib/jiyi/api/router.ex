@@ -50,6 +50,23 @@ defmodule Jiyi.API.Router do
     end
   end
 
+  post "/auth/mcp-token" do
+    with {:ok, request} <- validate_mcp_token_request(conn.body_params),
+         {:ok, request} <- Jiyi.Auth.authenticate(conn.assigns.api_token, request),
+         {:ok, token} <- Jiyi.Auth.issue_mcp_token(request.agent_id, request.org_id) do
+      send_json(conn, 200, %{token: token, expires_in: 300})
+    else
+      {:error, :agent_id_mismatch} ->
+        send_json(conn, 403, %{error: "agent_id_mismatch"})
+
+      {:error, reason} when reason in [:invalid_token, :missing_token] ->
+        send_json(conn, 401, %{error: reason})
+
+      {:error, reason} ->
+        send_json(conn, 400, %{error: reason})
+    end
+  end
+
   match _ do
     send_json(conn, 404, %{error: "not_found"})
   end
@@ -98,6 +115,18 @@ defmodule Jiyi.API.Router do
          content: params["content"],
          provenance: params["provenance"],
          scope: params["scope"]
+       }}
+    else
+      {:error, :missing_fields}
+    end
+  end
+
+  defp validate_mcp_token_request(params) do
+    if Map.has_key?(params, "agent_id") do
+      {:ok,
+       %{
+         agent_id: params["agent_id"],
+         org_id: Map.get(params, "org_id")
        }}
     else
       {:error, :missing_fields}

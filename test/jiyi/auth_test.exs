@@ -56,6 +56,54 @@ defmodule Jiyi.AuthTest do
     assert {:error, :missing_token} = Auth.authenticate("", %{agent_id: "a"})
   end
 
+  test "mcp session token authenticates matching agent_id" do
+    agent_id = "agent-#{System.unique_integer([:positive])}"
+    {:ok, token} = Auth.issue_mcp_token(agent_id)
+
+    assert {:ok, %{agent_id: ^agent_id}} =
+             Auth.authenticate_mcp(token, %{agent_id: agent_id, task: "t"})
+  end
+
+  test "mcp session token rejects mismatched agent_id" do
+    {:ok, token} = Auth.issue_mcp_token("agent-a")
+
+    assert {:error, :agent_id_mismatch} =
+             Auth.authenticate_mcp(token, %{agent_id: "agent-b", task: "t"})
+  end
+
+  test "expired mcp session token is rejected" do
+    agent_id = "agent-#{System.unique_integer([:positive])}"
+    token = insert_expired_mcp_token(agent_id)
+
+    assert {:error, :expired_token} =
+             Auth.authenticate_mcp(token, %{agent_id: agent_id, task: "t"})
+  end
+
+  test "mcp session token injects org_id" do
+    agent_id = "agent-#{System.unique_integer([:positive])}"
+    org_id = "org-#{System.unique_integer([:positive])}"
+    {:ok, token} = Auth.issue_mcp_token(agent_id, org_id)
+
+    assert {:ok, %{agent_id: ^agent_id, org_id: ^org_id}} =
+             Auth.authenticate_mcp(token, %{agent_id: agent_id, task: "t"})
+  end
+
+  defp insert_expired_mcp_token(agent_id) do
+    token = "expired-token-#{System.unique_integer([:positive])}"
+    hash = :crypto.hash(:sha256, token) |> Base.encode16(case: :lower)
+
+    %Jiyi.Schemas.McpSessionToken{}
+    |> Jiyi.Schemas.McpSessionToken.changeset(%{
+      token_hash: hash,
+      agent_id: agent_id,
+      expires_at: DateTime.add(DateTime.utc_now(), -1, :second),
+      inserted_at: DateTime.utc_now()
+    })
+    |> Jiyi.Repo.insert!()
+
+    token
+  end
+
   defp insert_agent_key(token, agent_id, org_id \\ nil) do
     hash = :crypto.hash(:sha256, token) |> Base.encode16(case: :lower)
 

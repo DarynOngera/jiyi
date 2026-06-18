@@ -186,13 +186,16 @@ defmodule Jiyi.Memory.SemanticStore do
       Enum.reduce(scopes, false, fn scope, dynamic ->
         case scope do
           "agent_private" ->
-            dynamic([f], ^dynamic or f.agent_id == ^agent_id)
+            dynamic([f], ^dynamic or (f.scope == "agent_private" and f.agent_id == ^agent_id))
 
           "session_shared" when is_binary(session_id) and session_id != "" ->
-            dynamic([f], ^dynamic or (f.agent_id == ^agent_id and f.session_id == ^session_id))
+            dynamic(
+              [f],
+              ^dynamic or (f.scope == "session_shared" and f.session_id == ^session_id)
+            )
 
           "org_shared" when is_binary(org_id) and org_id != "" ->
-            dynamic([f], ^dynamic or f.org_id == ^org_id)
+            dynamic([f], ^dynamic or (f.scope == "org_shared" and f.org_id == ^org_id))
 
           _ ->
             dynamic

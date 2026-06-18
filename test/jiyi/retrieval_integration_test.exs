@@ -146,8 +146,9 @@ defmodule Jiyi.RetrievalIntegrationTest do
     assert first =~ "Recent agent derived report"
   end
 
-  test "session_shared facts require matching session_id when scoped" do
-    agent_id = "agent-#{System.unique_integer([:positive])}"
+  test "session_shared facts are visible to any agent in the same session" do
+    agent_a = "agent-#{System.unique_integer([:positive])}"
+    agent_b = "agent-#{System.unique_integer([:positive])}"
     session_a = "session-#{System.unique_integer([:positive])}"
     session_b = "session-#{System.unique_integer([:positive])}"
 
@@ -156,7 +157,7 @@ defmodule Jiyi.RetrievalIntegrationTest do
         subject: "alert",
         predicate: "severity",
         object: "high",
-        agent_id: agent_id,
+        agent_id: agent_a,
         session_id: session_a,
         provenance_source: "user_message",
         ingestion_method: "direct_write",
@@ -164,25 +165,25 @@ defmodule Jiyi.RetrievalIntegrationTest do
         scope: "session_shared"
       })
 
-    result_a =
+    result_same_session =
       Retrieval.assemble(%{
-        agent_id: agent_id,
+        agent_id: agent_b,
         session_id: session_a,
         memory_scopes: ["session_shared"],
         task: "alert severity"
       })
 
-    assert result_a.assembled_context =~ "high"
+    assert result_same_session.assembled_context =~ "high"
 
-    result_b =
+    result_other_session =
       Retrieval.assemble(%{
-        agent_id: agent_id,
+        agent_id: agent_a,
         session_id: session_b,
         memory_scopes: ["session_shared"],
         task: "alert severity"
       })
 
-    refute result_b.assembled_context =~ "high"
+    refute result_other_session.assembled_context =~ "high"
   end
 
   test "org_shared memories require matching org_id when scoped" do
@@ -248,5 +249,35 @@ defmodule Jiyi.RetrievalIntegrationTest do
       })
 
     refute result.assembled_context =~ "Misclassified org shared note"
+  end
+
+  test "agent_private rows are not visible under org_shared even with matching org_id" do
+    agent_a = "agent-#{System.unique_integer([:positive])}"
+    agent_b = "agent-#{System.unique_integer([:positive])}"
+    session_id = "session-#{System.unique_integer([:positive])}"
+    org_id = "org-#{System.unique_integer([:positive])}"
+
+    {:ok, _id} =
+      EpisodicStore.write(%{
+        agent_id: agent_a,
+        session_id: session_id,
+        org_id: org_id,
+        summary: "Agent A private note with org id",
+        provenance_source: "user_message",
+        ingestion_method: "direct_write",
+        trust_tier: "agent_derived",
+        scope: "agent_private"
+      })
+
+    result =
+      Retrieval.assemble(%{
+        agent_id: agent_b,
+        session_id: session_id,
+        org_id: org_id,
+        memory_scopes: ["org_shared"],
+        task: "private note"
+      })
+
+    refute result.assembled_context =~ "Agent A private note with org id"
   end
 end

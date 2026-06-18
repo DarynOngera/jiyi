@@ -158,7 +158,7 @@ defmodule Jiyi.Retrieval do
 
   defp decay(dt) do
     age_hours = max(0, DateTime.diff(DateTime.utc_now(), dt, :hour))
-    half_life = Application.get_env(:jiyi, :retrieval_recency_half_life_hours, 1)
+    half_life = Application.get_env(:jiyi, :retrieval_recency_half_life_hours, 8)
     floor = Application.get_env(:jiyi, :retrieval_min_recency_multiplier, 0.1)
     max(floor, :math.pow(0.5, age_hours / half_life))
   end

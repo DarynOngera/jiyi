@@ -12,7 +12,9 @@ defmodule Jiyi.Auth do
   import Ecto.Query
 
   alias Jiyi.Repo
-  alias Jiyi.Schemas.AgentKey
+  alias Jiyi.Schemas.{AgentKey, McpSessionToken}
+
+  @mcp_token_ttl_seconds 300
 
   def authenticate(token, request) when is_binary(token) do
     with :ok <- validate_token_present(token),
@@ -23,6 +25,37 @@ defmodule Jiyi.Auth do
   end
 
   def authenticate(_, _), do: {:error, :missing_token}
+
+  def authenticate_mcp(token, request) when is_binary(token) do
+    with :ok <- validate_token_present(token),
+         {:ok, auth_context} <- resolve_mcp_token(token),
+         :ok <- verify_agent_id(auth_context, request) do
+      {:ok, apply_org_id(auth_context, request)}
+    end
+  end
+
+  def authenticate_mcp(_, _), do: {:error, :missing_token}
+
+  def issue_mcp_token(agent_id, org_id \\ nil) do
+    token = generate_token()
+    hash = hash_token(token)
+    now = DateTime.utc_now()
+    expires_at = DateTime.add(now, @mcp_token_ttl_seconds, :second)
+
+    %McpSessionToken{}
+    |> McpSessionToken.changeset(%{
+      token_hash: hash,
+      agent_id: agent_id,
+      org_id: org_id,
+      expires_at: expires_at,
+      inserted_at: now
+    })
+    |> Repo.insert()
+    |> case do
+      {:ok, _} -> {:ok, token}
+      error -> error
+    end
+  end
 
   defp validate_token_present(""), do: {:error, :missing_token}
   defp validate_token_present(nil), do: {:error, :missing_token}
@@ -49,8 +82,29 @@ defmodule Jiyi.Auth do
     end
   end
 
+  defp resolve_mcp_token(token) do
+    hash = hash_token(token)
+    now = DateTime.utc_now()
+
+    case Repo.one(from(t in McpSessionToken, where: t.token_hash == ^hash)) do
+      nil ->
+        {:error, :invalid_token}
+
+      token_record ->
+        if DateTime.compare(token_record.expires_at, now) == :gt do
+          {:ok, %{type: :agent, agent_id: token_record.agent_id, org_id: token_record.org_id}}
+        else
+          {:error, :expired_token}
+        end
+    end
+  end
+
   defp hash_token(token) do
     :crypto.hash(:sha256, token) |> Base.encode16(case: :lower)
+  end
+
+  defp generate_token do
+    :crypto.strong_rand_bytes(32) |> Base.url_encode64(padding: false)
   end
 
   defp verify_agent_id(%{type: :shared}, _request), do: :ok
