@@ -70,7 +70,7 @@ defmodule Jiyi.Memory.EpisodicStore do
                 id: event.id
               })
 
-              {:ok, event.id}
+              {:ok, %{status: "written", id: event.id}}
 
             {:error, _} ->
               case recent_duplicate(content_hash, window_start) do

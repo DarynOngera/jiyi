@@ -31,7 +31,7 @@ defmodule Jiyi.MixProject do
       {:ecto_sql, "~> 3.12"},
       {:postgrex, "~> 0.19"},
       {:pgvector, "~> 0.3"},
-      {:hermes_mcp, "~> 0.3"},
+      {:anubis_mcp, "~> 1.6.2"},
       {:telemetry, "~> 1.2"},
       {:telemetry_metrics, "~> 1.0"},
       {:jason, "~> 1.4"},

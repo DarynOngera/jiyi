@@ -7,7 +7,7 @@ defmodule Jiyi.Memory.EpisodicStoreTest do
     test "deduplicates within the content_hash window" do
       attrs = base_attrs("User reported phishing email")
 
-      assert {:ok, id} = EpisodicStore.write(attrs)
+      assert {:ok, %{id: id}} = EpisodicStore.write(attrs)
       assert {:duplicate, ^id} = EpisodicStore.write(attrs)
     end
 

@@ -1,13 +1,13 @@
 defmodule Jiyi.API.MCPServer do
   @moduledoc """
-  Hermes MCP server exposing the same operations as the HTTP router.
+  Anubis MCP server exposing the same operations as the HTTP router.
   """
 
-  use Hermes.Server,
+  use Anubis.Server,
     name: "jiyi",
     version: "0.1.0",
     capabilities: [:tools]
 
-  component(Jiyi.API.MCP.ContextAssembleTool)
-  component(Jiyi.API.MCP.MemoryWriteTool)
+  component(Jiyi.API.MCP.ContextAssembleTool, name: "context_assemble")
+  component(Jiyi.API.MCP.MemoryWriteTool, name: "memory_write")
 end

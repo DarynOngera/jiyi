@@ -65,7 +65,7 @@ defmodule Jiyi do
 
         with {:ok, _pid} <- ensure_session(session_id),
              :ok <- SessionState.put(session_id, :working, content) do
-          {:ok, session_id}
+          {:ok, %{status: "written", id: session_id}}
         end
 
       _ ->

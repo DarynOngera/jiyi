@@ -178,4 +178,19 @@ defmodule Jiyi.Auth do
     })
     |> Repo.insert()
   end
+
+  def create_agent_key(agent_id, org_id \\ nil) do
+    token = generate_token()
+
+    case register_key(token, agent_id, org_id) do
+      {:ok, _key} -> {:ok, token}
+      error -> error
+    end
+  end
+
+  def admin_token?(token) when is_binary(token) do
+    token == shared_token()
+  end
+
+  def admin_token?(_), do: false
 end

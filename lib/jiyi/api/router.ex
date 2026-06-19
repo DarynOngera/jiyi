@@ -67,19 +67,41 @@ defmodule Jiyi.API.Router do
     end
   end
 
+  post "/admin/agents" do
+    if Jiyi.Auth.admin_token?(conn.assigns.api_token) do
+      with {:ok, request} <- validate_register_agent_request(conn.body_params),
+           {:ok, token} <- Jiyi.Auth.create_agent_key(request.agent_id, request.org_id) do
+        send_json(conn, 201, %{agent_id: request.agent_id, api_key: token})
+      else
+        {:error, reason} -> send_json(conn, 400, %{error: reason})
+      end
+    else
+      send_json(conn, 403, %{error: "admin_required"})
+    end
+  end
+
+  forward("/mcp",
+    to: Anubis.Server.Transport.StreamableHTTP.Plug,
+    init_opts: [server: Jiyi.API.MCPServer]
+  )
+
   match _ do
     send_json(conn, 404, %{error: "not_found"})
   end
 
   defp authenticate(conn, _opts) do
-    case get_req_header(conn, "authorization") do
-      ["Bearer " <> token] when is_binary(token) and token != "" ->
-        Plug.Conn.assign(conn, :api_token, token)
+    if String.starts_with?(conn.request_path, "/mcp") do
+      conn
+    else
+      case get_req_header(conn, "authorization") do
+        ["Bearer " <> token] when is_binary(token) and token != "" ->
+          Plug.Conn.assign(conn, :api_token, token)
 
-      _ ->
-        conn
-        |> send_json(401, %{error: "unauthorized"})
-        |> halt()
+        _ ->
+          conn
+          |> send_json(401, %{error: "unauthorized"})
+          |> halt()
+      end
     end
   end
 
@@ -123,6 +145,18 @@ defmodule Jiyi.API.Router do
 
   defp validate_mcp_token_request(params) do
     if Map.has_key?(params, "agent_id") do
+      {:ok,
+       %{
+         agent_id: params["agent_id"],
+         org_id: Map.get(params, "org_id")
+       }}
+    else
+      {:error, :missing_fields}
+    end
+  end
+
+  defp validate_register_agent_request(params) do
+    if is_binary(Map.get(params, "agent_id")) and String.trim(params["agent_id"]) != "" do
       {:ok,
        %{
          agent_id: params["agent_id"],
