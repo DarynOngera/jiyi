@@ -88,6 +88,55 @@ defmodule Jiyi.AuthTest do
              Auth.authenticate_mcp(token, %{agent_id: agent_id, task: "t"})
   end
 
+  test "shared token preserves claimed human_asserted trust tier" do
+    shared = Application.fetch_env!(:jiyi, :api_token)
+
+    assert {:ok, %{provenance: %{"trust_tier" => "human_asserted"}}} =
+             Auth.authenticate(shared, %{
+               agent_id: "any-agent",
+               provenance: %{"trust_tier" => "human_asserted"},
+               task: "t"
+             })
+  end
+
+  test "per-agent key clamps human_asserted claim to agent_derived" do
+    agent_id = "agent-#{System.unique_integer([:positive])}"
+    token = "key-#{System.unique_integer([:positive])}"
+    insert_agent_key(token, agent_id)
+
+    assert {:ok, %{provenance: %{"trust_tier" => "agent_derived"}}} =
+             Auth.authenticate(token, %{
+               agent_id: agent_id,
+               provenance: %{"trust_tier" => "human_asserted"},
+               task: "t"
+             })
+  end
+
+  test "per-agent key allows agent_derived claim unchanged" do
+    agent_id = "agent-#{System.unique_integer([:positive])}"
+    token = "key-#{System.unique_integer([:positive])}"
+    insert_agent_key(token, agent_id)
+
+    assert {:ok, %{provenance: %{"trust_tier" => "agent_derived"}}} =
+             Auth.authenticate(token, %{
+               agent_id: agent_id,
+               provenance: %{"trust_tier" => "agent_derived"},
+               task: "t"
+             })
+  end
+
+  test "mcp session token clamps human_asserted claim" do
+    agent_id = "agent-#{System.unique_integer([:positive])}"
+    {:ok, token} = Auth.issue_mcp_token(agent_id)
+
+    assert {:ok, %{provenance: %{"trust_tier" => "agent_derived"}}} =
+             Auth.authenticate_mcp(token, %{
+               agent_id: agent_id,
+               provenance: %{"trust_tier" => "human_asserted"},
+               task: "t"
+             })
+  end
+
   defp insert_expired_mcp_token(agent_id) do
     token = "expired-token-#{System.unique_integer([:positive])}"
     hash = :crypto.hash(:sha256, token) |> Base.encode16(case: :lower)

@@ -15,7 +15,24 @@ defmodule Jiyi.Retrieval do
     compressed = compress(ranked, request)
 
     emit_stage(:format, length(compressed))
-    format(compressed, request)
+    result = format(compressed, request)
+
+    if Jiyi.Anomaly.Detector.anomalous?(result.assembled_context) do
+      :telemetry.execute([:jiyi, :retrieval, :compositional_anomaly], %{count: 1}, %{
+        agent_id: request.agent_id,
+        session_id: Map.get(request, :session_id)
+      })
+
+      %{
+        result
+        | assembled_context: "",
+          token_count: 0,
+          blocked: true,
+          error: "compositional_anomaly_detected"
+      }
+    else
+      result
+    end
   end
 
   defp normalize_request(request) do
@@ -205,7 +222,9 @@ defmodule Jiyi.Retrieval do
     %{
       assembled_context: context,
       sources: sources,
-      token_count: estimate_tokens(context)
+      token_count: estimate_tokens(context),
+      blocked: false,
+      error: nil
     }
   end
 

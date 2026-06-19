@@ -2,6 +2,11 @@ defmodule Jiyi.Anomaly.Watcher do
   @moduledoc """
   Scheduled GenServer that scans recent memory writes for anomalies
   and routes hits into Quarantine.
+
+  Scans run every 60 seconds. Because the watcher reacts to pattern-list
+  updates rather than writes, a record that passes the inline write-time
+  check but matches a newly added pattern can remain retrievable for up to
+  one interval before being quarantined.
   """
 
   use GenServer
@@ -69,10 +74,10 @@ defmodule Jiyi.Anomaly.Watcher do
   end
 
   defp anomalous?(%EpisodicEvent{summary: summary}),
-    do: Jiyi.Anomaly.Detector.instruction_like?(summary)
+    do: Jiyi.Anomaly.Detector.anomalous?(summary)
 
   defp anomalous?(%SemanticFact{subject: s, predicate: p, object: o}),
-    do: Jiyi.Anomaly.Detector.instruction_like?(s <> " " <> p <> " " <> o)
+    do: Jiyi.Anomaly.Detector.anomalous?(s <> " " <> p <> " " <> o)
 
   defp serialize(%EpisodicEvent{} = event) do
     Map.from_struct(event)
