@@ -202,6 +202,6 @@ defmodule Jiyi.Memory.EpisodicStore do
 
   defp anomaly?(attrs) do
     summary = Map.get(attrs, :summary, "")
-    Jiyi.Anomaly.Detector.instruction_like?(summary)
+    Jiyi.Anomaly.Detector.anomalous?(summary)
   end
 end

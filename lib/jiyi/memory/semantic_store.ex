@@ -247,6 +247,6 @@ defmodule Jiyi.Memory.SemanticStore do
     text =
       "#{Map.get(attrs, :subject, "")} #{Map.get(attrs, :predicate, "")} #{Map.get(attrs, :object, "")}"
 
-    Jiyi.Anomaly.Detector.instruction_like?(text)
+    Jiyi.Anomaly.Detector.anomalous?(text)
   end
 end
