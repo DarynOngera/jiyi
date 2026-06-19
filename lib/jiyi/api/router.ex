@@ -80,10 +80,7 @@ defmodule Jiyi.API.Router do
     end
   end
 
-  forward("/mcp",
-    to: Anubis.Server.Transport.StreamableHTTP.Plug,
-    init_opts: [server: Jiyi.API.MCPServer]
-  )
+  forward("/mcp", to: Jiyi.API.MCPPlug)
 
   match _ do
     send_json(conn, 404, %{error: "not_found"})

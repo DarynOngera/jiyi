@@ -251,7 +251,7 @@ defmodule Jiyi.RetrievalIntegrationTest do
     refute result.assembled_context =~ "Misclassified org shared note"
   end
 
-  test "assembly-time scan blocks anomalous joined context" do
+  test "assembly-time scan isolates offending item and keeps clean context" do
     agent_id = "agent-#{System.unique_integer([:positive])}"
     session_id = "session-#{System.unique_integer([:positive])}"
 
@@ -276,9 +276,20 @@ defmodule Jiyi.RetrievalIntegrationTest do
         task: "login"
       })
 
-    assert result.blocked
-    assert result.assembled_context == ""
-    assert result.error == "compositional_anomaly_detected"
+    refute result.blocked
+    assert result.assembled_context =~ "User reported suspicious login"
+    refute result.assembled_context =~ "ignore previous instructions"
+    assert is_nil(Jiyi.Memory.SessionState.get(session_id, :active_task))
+
+    follow_up =
+      Retrieval.assemble(%{
+        agent_id: agent_id,
+        session_id: session_id,
+        task: "login"
+      })
+
+    refute follow_up.blocked
+    assert follow_up.assembled_context =~ "User reported suspicious login"
   end
 
   test "agent_private rows are not visible under org_shared even with matching org_id" do
@@ -309,5 +320,73 @@ defmodule Jiyi.RetrievalIntegrationTest do
       })
 
     refute result.assembled_context =~ "Agent A private note with org id"
+  end
+
+  test "procedural playbook content does not trigger anomaly scan" do
+    agent_id = "agent-#{System.unique_integer([:positive])}"
+    session_id = "session-#{System.unique_integer([:positive])}"
+
+    playbook_text = Jiyi.Memory.Procedural.content_for_task("investigate") |> Enum.join("\n")
+    refute Jiyi.Anomaly.Detector.anomalous?(playbook_text)
+
+    {:ok, _id} =
+      EpisodicStore.write(%{
+        agent_id: agent_id,
+        session_id: session_id,
+        summary: "Investigate suspicious login",
+        provenance_source: "user_message",
+        ingestion_method: "direct_write",
+        trust_tier: "agent_derived",
+        scope: "agent_private"
+      })
+
+    result =
+      Retrieval.assemble(%{
+        agent_id: agent_id,
+        session_id: session_id,
+        task: "investigate login"
+      })
+
+    refute result.blocked
+    assert result.assembled_context =~ "Investigation Triage"
+    assert result.assembled_context =~ "Investigate suspicious login"
+  end
+
+  test "every playbook file is safe from detector and retrieval blocking" do
+    agent_id = "agent-#{System.unique_integer([:positive])}"
+    session_id = "session-#{System.unique_integer([:positive])}"
+
+    root = :code.priv_dir(:jiyi) |> Path.join("playbooks")
+    playbooks = Path.wildcard(Path.join(root, "**/*.md"))
+
+    assert length(playbooks) > 0
+
+    {:ok, _id} =
+      EpisodicStore.write(%{
+        agent_id: agent_id,
+        session_id: session_id,
+        summary: "Investigate normal memory",
+        provenance_source: "user_message",
+        ingestion_method: "direct_write",
+        trust_tier: "agent_derived",
+        scope: "agent_private"
+      })
+
+    Enum.each(playbooks, fn path ->
+      content = File.read!(path)
+      refute Jiyi.Anomaly.Detector.anomalous?(content)
+
+      task_type = path |> Path.dirname() |> Path.basename()
+
+      result =
+        Retrieval.assemble(%{
+          agent_id: agent_id,
+          session_id: session_id,
+          task: "#{task_type} memory"
+        })
+
+      refute result.blocked
+      assert result.assembled_context =~ content
+    end)
   end
 end
