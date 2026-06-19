@@ -13,7 +13,6 @@ defmodule Jiyi.API.Supervisor do
     mcp_transport = Application.fetch_env!(:jiyi, :mcp_transport)
 
     children = [
-      Hermes.Server.Registry,
       {Bandit, plug: Jiyi.API.Router, scheme: :http, port: http_port},
       {Jiyi.API.MCPServer, transport: mcp_transport}
     ]

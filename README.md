@@ -11,7 +11,7 @@ Jiyi stores and retrieves four kinds of memory:
 - **Working memory** – per-session, short-term key/value state.
 - **Procedural memory** – git-backed playbook files read at assembly time.
 
-It exposes both an HTTP API (`Plug` + `Bandit`) and an MCP server (`hermes_mcp`) so callers can `context/assemble` ranked memory or `memory/write` new entries.
+It exposes both an HTTP API (`Plug` + `Bandit`) and an MCP server (`anubis_mcp`) so callers can `context/assemble` ranked memory or `memory/write` new entries.
 
 ## Requirements
 
@@ -34,6 +34,50 @@ mix ecto.migrate
 
 Default embedding dimension is `768`. Change it in `config/config.exs` before the first migration if you use a different model.
 
+## Quick start
+
+Start the service (assumes Postgres and the configured embedding endpoint are running):
+
+```bash
+export JIYI_API_TOKEN="dev-token-change-me"
+mix run --no-halt
+```
+
+Write a memory and read it back:
+
+```bash
+curl -X POST http://localhost:4000/memory/write \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $JIYI_API_TOKEN" \
+  -d '{
+    "type": "semantic",
+    "agent_id": "agent-1",
+    "session_id": "session-1",
+    "content": {"subject": "project", "predicate": "uses", "object": "Elixir"},
+    "provenance": {"source": "user_message", "ingestion_method": "direct_write", "trust_tier": "human_asserted"},
+    "scope": "session_shared"
+  }'
+
+curl -X POST http://localhost:4000/context/assemble \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $JIYI_API_TOKEN" \
+  -d '{"agent_id": "agent-1", "session_id": "session-1", "task": "What does the project use?"}'
+```
+
+### MCP
+
+Jiyi also exposes the same operations as MCP tools. Use `stdio` (default) for clients that spawn the server process, or `streamable_http` to access MCP over the HTTP API:
+
+```bash
+# stdio
+JIYI_MCP_TRANSPORT=stdio mix run --no-halt
+
+# streamable HTTP
+JIYI_MCP_TRANSPORT=streamable_http mix run --no-halt
+```
+
+With `streamable_http`, point an MCP client at `http://localhost:4000/mcp`.
+
 ## Configuration
 
 | Variable | Default | Purpose |
@@ -45,6 +89,8 @@ Default embedding dimension is `768`. Change it in `config/config.exs` before th
 | `JIYI_HTTP_PORT` | `4000` | HTTP API port |
 | `JIYI_API_TOKEN` | `dev-token-change-me` | Shared admin bearer token for HTTP endpoints |
 | `JIYI_EMBEDDING_ENDPOINT` | `http://localhost:8000/embed` | Local embedding service URL |
+| `JIYI_MCP_TRANSPORT` | `stdio` | MCP transport: `stdio` or `streamable_http` |
+| `JIYI_MCP_HTTP_PORT` | `4001` | Dedicated MCP streamable HTTP port when enabled |
 
 ## Authentication
 

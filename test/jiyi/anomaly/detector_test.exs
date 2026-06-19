@@ -10,7 +10,9 @@ defmodule Jiyi.Anomaly.DetectorTest do
 
   test "flags high-entropy encoded payloads" do
     payload =
-      Enum.map(1..256, fn _ -> Enum.random(32..126) end)
+      (Enum.to_list(32..126) ++ Enum.to_list(32..126) ++ Enum.to_list(32..126))
+      |> Enum.shuffle()
+      |> Enum.take(256)
       |> List.to_string()
 
     assert Detector.anomalous?(payload)

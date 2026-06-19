@@ -128,6 +128,53 @@ defmodule Jiyi.API.RouterTest do
                "expires_in" => 300
              } = Jason.decode!(conn.resp_body)
     end
+
+    test "creates agent key with admin token" do
+      agent_id = "agent-#{System.unique_integer([:positive])}"
+
+      conn =
+        :post
+        |> Plug.Test.conn("/admin/agents", %{agent_id: agent_id})
+        |> Plug.Conn.put_req_header("content-type", "application/json")
+        |> Plug.Conn.put_req_header("authorization", "Bearer test-token")
+        |> Router.call([])
+
+      assert conn.status == 201
+
+      assert %{
+               "agent_id" => ^agent_id,
+               "api_key" => api_key
+             } = Jason.decode!(conn.resp_body)
+
+      assert is_binary(api_key)
+    end
+
+    test "returns 403 for non-admin token on /admin/agents" do
+      agent_id = "agent-#{System.unique_integer([:positive])}"
+      token = "agent-key-#{System.unique_integer([:positive])}"
+      insert_agent_key(token, agent_id)
+
+      conn =
+        :post
+        |> Plug.Test.conn("/admin/agents", %{agent_id: agent_id})
+        |> Plug.Conn.put_req_header("content-type", "application/json")
+        |> Plug.Conn.put_req_header("authorization", "Bearer #{token}")
+        |> Router.call([])
+
+      assert conn.status == 403
+      assert %{"error" => "admin_required"} = Jason.decode!(conn.resp_body)
+    end
+
+    test "returns 400 for missing agent_id on /admin/agents" do
+      conn =
+        :post
+        |> Plug.Test.conn("/admin/agents", %{})
+        |> Plug.Conn.put_req_header("content-type", "application/json")
+        |> Plug.Conn.put_req_header("authorization", "Bearer test-token")
+        |> Router.call([])
+
+      assert conn.status == 400
+    end
   end
 
   defp insert_agent_key(token, agent_id) do
