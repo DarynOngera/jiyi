@@ -175,6 +175,21 @@ defmodule Jiyi.API.RouterTest do
 
       assert conn.status == 400
     end
+
+    test "returns 404 on /mcp when mcp transport is stdio" do
+      original = Application.fetch_env!(:jiyi, :mcp_transport)
+      Application.put_env(:jiyi, :mcp_transport, :stdio)
+      on_exit(fn -> Application.put_env(:jiyi, :mcp_transport, original) end)
+
+      conn =
+        :post
+        |> Plug.Test.conn("/mcp", %{})
+        |> Plug.Conn.put_req_header("content-type", "application/json")
+        |> Router.call([])
+
+      assert conn.status == 404
+      assert %{"error" => "mcp_not_enabled"} = Jason.decode!(conn.resp_body)
+    end
   end
 
   defp insert_agent_key(token, agent_id) do

@@ -4,6 +4,7 @@ defmodule Jiyi.Retrieval do
   """
 
   alias Jiyi.Memory.{EpisodicStore, Procedural, SemanticStore, SessionState}
+  alias Jiyi.Repo
   alias Jiyi.Schemas.{EpisodicEvent, SemanticFact}
 
   def assemble(request) do
@@ -14,24 +15,91 @@ defmodule Jiyi.Retrieval do
     ranked = rank(episodic ++ semantic ++ working ++ procedural, request)
     compressed = compress(ranked, request)
 
-    emit_stage(:format, length(compressed))
     result = format(compressed, request)
 
-    if Jiyi.Anomaly.Detector.anomalous?(result.assembled_context) do
+    scannable = Enum.reject(compressed, &procedural?/1)
+    scan_context = context_string(scannable)
+
+    if Jiyi.Anomaly.Detector.anomalous?(scan_context, embedding: embed_text(scan_context)) do
       :telemetry.execute([:jiyi, :retrieval, :compositional_anomaly], %{count: 1}, %{
         agent_id: request.agent_id,
         session_id: Map.get(request, :session_id)
       })
 
-      %{
-        result
-        | assembled_context: "",
-          token_count: 0,
-          blocked: true,
-          error: "compositional_anomaly_detected"
-      }
+      case isolate_offenders(scannable, request) do
+        [] ->
+          blocked_result(result)
+
+        offenders ->
+          clean_items = Enum.reject(compressed, &Enum.member?(offenders, &1))
+          clean_result = format(clean_items, request)
+
+          Enum.each(offenders, &quarantine_offender(&1, request))
+
+          clean_result
+      end
     else
       result
+    end
+  end
+
+  defp procedural?(%{type: :procedural}), do: true
+  defp procedural?(_), do: false
+
+  defp isolate_offenders(items, _request) do
+    full_context = context_string(items)
+
+    if Jiyi.Anomaly.Detector.anomalous?(full_context, embedding: embed_text(full_context)) do
+      Enum.filter(items, fn item ->
+        without = List.delete(items, item)
+        context = context_string(without)
+
+        not Jiyi.Anomaly.Detector.anomalous?(context, embedding: embed_text(context))
+      end)
+    else
+      []
+    end
+  end
+
+  defp quarantine_offender(%EpisodicEvent{} = event, _request) do
+    payload = event |> Map.from_struct() |> Map.drop([:__meta__])
+    Jiyi.Memory.Quarantine.hold("episodic_events", payload, "compositional_anomaly")
+    Repo.delete(event)
+  end
+
+  defp quarantine_offender(%SemanticFact{} = fact, _request) do
+    payload = fact |> Map.from_struct() |> Map.drop([:__meta__])
+    Jiyi.Memory.Quarantine.hold("semantic_facts", payload, "compositional_anomaly")
+    Repo.delete(fact)
+  end
+
+  defp quarantine_offender(%{type: :working, key: key}, %{session_id: session_id}) do
+    Jiyi.Memory.SessionState.delete(session_id, key)
+  end
+
+  defp quarantine_offender(_item, _request), do: :ok
+
+  defp blocked_result(result) do
+    %{
+      result
+      | assembled_context: "",
+        token_count: 0,
+        blocked: true,
+        error: "compositional_anomaly_detected"
+    }
+  end
+
+  defp context_string(items) do
+    items
+    |> Enum.map(&format_item/1)
+    |> Enum.reject(&(&1 == ""))
+    |> Enum.join("\n\n")
+  end
+
+  defp embed_text(text) do
+    case Jiyi.EmbeddingClient.CircuitBreaker.embed(text) do
+      {:ok, vector} -> vector
+      {:error, _} -> nil
     end
   end
 
@@ -186,7 +254,6 @@ defmodule Jiyi.Retrieval do
   defp compress(items, request) do
     emit_stage(:compress, length(items))
     budget = request.token_budget
-    # Naive token estimation: 1 token ~= 4 chars of English text.
     char_budget = budget * 4
 
     {selected, _used} =

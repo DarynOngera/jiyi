@@ -64,7 +64,10 @@ defmodule Jiyi.API.MCP.MemoryWriteTool do
 
       field(:trust_tier, :string,
         required: true,
-        description: "One of human_asserted, agent_derived, or external_untrusted."
+        description:
+          "One of human_asserted, agent_derived, or external_untrusted. " <>
+            "human_asserted is only honored for the shared admin token; " <>
+            "per-agent keys and MCP session tokens are clamped to agent_derived server-side."
       )
     end
 

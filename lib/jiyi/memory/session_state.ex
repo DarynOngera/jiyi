@@ -22,6 +22,10 @@ defmodule Jiyi.Memory.SessionState do
     GenServer.call(Jiyi.Memory.SessionSupervisor.via(session_id), {:put, key, value})
   end
 
+  def delete(session_id, key) do
+    GenServer.call(Jiyi.Memory.SessionSupervisor.via(session_id), {:delete, key})
+  end
+
   def checkpoint(session_id) do
     GenServer.call(Jiyi.Memory.SessionSupervisor.via(session_id), :checkpoint)
   end
@@ -59,6 +63,11 @@ defmodule Jiyi.Memory.SessionState do
 
     state = maybe_checkpoint(state)
     {:reply, :ok, state}
+  end
+
+  def handle_call({:delete, key}, _from, state) do
+    new_data = Map.delete(state.data, to_string(key))
+    {:reply, :ok, %{state | data: new_data, dirty: true}}
   end
 
   def handle_call(:checkpoint, _from, state) do

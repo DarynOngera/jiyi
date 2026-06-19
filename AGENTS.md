@@ -48,4 +48,4 @@ Jiyi is an Elixir service that provides durable, vector-backed memory for autono
 - Never log or commit `JIYI_API_TOKEN`.
 - Treat `external_untrusted` provenance as potentially hostile: it goes to `Quarantine`, not the main tables.
 - `Jiyi.Anomaly.Watcher` scans for prompt-injection-like phrasing; update its pattern list deliberately.
-- Bearer-token auth is required on all HTTP endpoints.
+- `Jiyi.API.Router` requires a bearer token on all HTTP routes except `/mcp`, which is forwarded to the MCP server. MCP tool calls authenticate per-call via `session_token` inside the tool arguments (`Jiyi.Auth.authenticate_mcp/2`); `initialize` / `tools/list` are therefore reachable without a bearer token and this is accepted.
