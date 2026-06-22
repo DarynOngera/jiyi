@@ -80,6 +80,63 @@ defmodule Jiyi.API.Router do
     end
   end
 
+  get "/admin/quarantine" do
+    if Jiyi.Auth.admin_token?(conn.assigns.api_token) do
+      entries =
+        Jiyi.Memory.Quarantine.list_pending()
+        |> Enum.map(fn entry ->
+          %{
+            id: entry.id,
+            target_table: entry.target_table,
+            reason: entry.reason,
+            created_at: entry.created_at,
+            payload: entry.payload
+          }
+        end)
+
+      send_json(conn, 200, %{entries: entries})
+    else
+      send_json(conn, 403, %{error: "admin_required"})
+    end
+  end
+
+  post "/admin/quarantine/:id/promote" do
+    if Jiyi.Auth.admin_token?(conn.assigns.api_token) do
+      case Jiyi.Memory.Quarantine.promote(conn.params["id"]) do
+        {:ok, _} ->
+          send_json(conn, 200, %{status: "promoted", id: conn.params["id"]})
+
+        {:error, :already_reviewed} ->
+          send_json(conn, 409, %{error: "already_reviewed"})
+
+        {:error, reason} ->
+          send_json(conn, 400, %{error: reason})
+      end
+    else
+      send_json(conn, 403, %{error: "admin_required"})
+    end
+  end
+
+  post "/admin/quarantine/:id/reject" do
+    if Jiyi.Auth.admin_token?(conn.assigns.api_token) do
+      case Jiyi.Memory.Quarantine.reject(conn.params["id"]) do
+        :ok ->
+          send_json(conn, 200, %{status: "rejected", id: conn.params["id"]})
+
+        {:error, :not_found} ->
+          send_json(conn, 404, %{error: "not_found"})
+
+        {:error, :already_reviewed} ->
+          send_json(conn, 409, %{error: "already_reviewed"})
+
+        {:error, reason} ->
+          send_json(conn, 400, %{error: reason})
+      end
+    else
+      send_json(conn, 403, %{error: "admin_required"})
+    end
+  end
+
   forward("/mcp", to: Jiyi.API.MCPPlug)
 
   match _ do

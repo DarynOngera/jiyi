@@ -44,4 +44,51 @@ defmodule Jiyi.Memory.QuarantineTest do
     assert entry.status == "pending"
     assert is_nil(entry.reviewed_at)
   end
+
+  test "hold_and_delete atomically quarantines and removes the record" do
+    now = DateTime.utc_now()
+
+    event =
+      %EpisodicEvent{}
+      |> EpisodicEvent.changeset(%{
+        agent_id: "agent-1",
+        session_id: "session-1",
+        summary: "Suspicious IOC from feed",
+        occurred_at: now,
+        provenance_source: "feed",
+        ingestion_method: "api",
+        trust_tier: "agent_derived",
+        scope: "agent_private",
+        content_hash: :crypto.hash(:sha256, "x") |> Base.encode16(case: :lower)
+      })
+      |> Jiyi.Repo.insert!()
+
+    payload = event |> Map.from_struct() |> Map.drop([:__meta__])
+
+    assert {:ok, _id} = Quarantine.hold_and_delete("episodic_events", payload, "test", event)
+
+    assert is_nil(Jiyi.Repo.get(EpisodicEvent, event.id))
+    assert Jiyi.Repo.get_by(QuarantineEntry, reason: "test", target_table: "episodic_events")
+  end
+
+  test "hold_and_delete rolls back quarantine insert when delete fails" do
+    payload = %{
+      "agent_id" => "agent-1",
+      "session_id" => "session-1",
+      "summary" => "Suspicious IOC from feed",
+      "occurred_at" => DateTime.utc_now(),
+      "provenance_source" => "feed",
+      "ingestion_method" => "api",
+      "trust_tier" => "agent_derived",
+      "scope" => "agent_private",
+      "content_hash" => :crypto.hash(:sha256, "x") |> Base.encode16(case: :lower)
+    }
+
+    fake_event = %EpisodicEvent{id: Ecto.UUID.generate()}
+
+    assert {:error, _changeset} =
+             Quarantine.hold_and_delete("episodic_events", payload, "test", fake_event)
+
+    refute Jiyi.Repo.get_by(QuarantineEntry, reason: "test")
+  end
 end

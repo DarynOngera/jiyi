@@ -4,9 +4,26 @@ defmodule Jiyi.Anomaly.DetectorTest do
   alias Jiyi.Anomaly.Detector
 
   setup do
-    original = Application.get_env(:jiyi, :anomaly_injection_reference_vectors)
-    Application.put_env(:jiyi, :anomaly_injection_reference_vectors, [])
-    on_exit(fn -> Application.put_env(:jiyi, :anomaly_injection_reference_vectors, original) end)
+    original = Application.get_env(:jiyi, :anomaly_reference_injections)
+    Application.put_env(:jiyi, :anomaly_reference_injections, [])
+
+    unless Process.whereis(Jiyi.Anomaly.ReferenceStore) do
+      start_supervised!(Jiyi.Anomaly.ReferenceStore)
+    end
+
+    Jiyi.Anomaly.ReferenceStore.reload()
+    Process.sleep(10)
+
+    on_exit(fn ->
+      Application.put_env(:jiyi, :anomaly_reference_injections, original)
+
+      try do
+        :meck.unload(Jiyi.EmbeddingClient.CircuitBreaker)
+      rescue
+        _ -> :ok
+      end
+    end)
+
     :ok
   end
 
@@ -64,7 +81,13 @@ defmodule Jiyi.Anomaly.DetectorTest do
 
   defp set_reference_vector do
     vector = [1.0] ++ List.duplicate(0.0, 767)
-    Application.put_env(:jiyi, :anomaly_injection_reference_vectors, [vector])
+
+    :meck.expect(Jiyi.EmbeddingClient.CircuitBreaker, :embed, fn _ -> {:ok, vector} end)
+
+    Application.put_env(:jiyi, :anomaly_reference_injections, ["reference phrase"])
+    Jiyi.Anomaly.ReferenceStore.reload()
+    Process.sleep(10)
+
     vector
   end
 

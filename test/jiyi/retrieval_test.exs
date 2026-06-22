@@ -13,6 +13,10 @@ defmodule Jiyi.RetrievalTest do
       start_supervised!(Jiyi.Retrieval.Supervisor)
     end
 
+    unless Process.whereis(Jiyi.Anomaly.ReferenceStore) do
+      start_supervised!(Jiyi.Anomaly.ReferenceStore)
+    end
+
     :ok
   end
 

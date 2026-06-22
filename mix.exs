@@ -36,7 +36,8 @@ defmodule Jiyi.MixProject do
       {:telemetry_metrics, "~> 1.0"},
       {:jason, "~> 1.4"},
       {:finch, "~> 0.18"},
-      {:ex_doc, "~> 0.34", only: :dev, runtime: false}
+      {:ex_doc, "~> 0.34", only: :dev, runtime: false},
+      {:meck, "~> 0.9", only: :test}
     ]
   end
 end

@@ -4,7 +4,6 @@ defmodule Jiyi.Retrieval do
   """
 
   alias Jiyi.Memory.{EpisodicStore, Procedural, SemanticStore, SessionState}
-  alias Jiyi.Repo
   alias Jiyi.Schemas.{EpisodicEvent, SemanticFact}
 
   def assemble(request) do
@@ -47,33 +46,43 @@ defmodule Jiyi.Retrieval do
   defp procedural?(_), do: false
 
   defp isolate_offenders(items, _request) do
-    full_context = context_string(items)
+    Enum.filter(items, fn item ->
+      without = List.delete(items, item)
+      context = context_string(without)
 
-    if Jiyi.Anomaly.Detector.anomalous?(full_context, embedding: embed_text(full_context)) do
-      Enum.filter(items, fn item ->
-        without = List.delete(items, item)
-        context = context_string(without)
-
-        not Jiyi.Anomaly.Detector.anomalous?(context, embedding: embed_text(context))
-      end)
-    else
-      []
-    end
+      not Jiyi.Anomaly.Detector.anomalous?(context)
+    end)
   end
 
   defp quarantine_offender(%EpisodicEvent{} = event, _request) do
     payload = event |> Map.from_struct() |> Map.drop([:__meta__])
-    Jiyi.Memory.Quarantine.hold("episodic_events", payload, "compositional_anomaly")
-    Repo.delete(event)
+
+    Jiyi.Memory.Quarantine.hold_and_delete(
+      "episodic_events",
+      payload,
+      "compositional_anomaly",
+      event
+    )
   end
 
   defp quarantine_offender(%SemanticFact{} = fact, _request) do
     payload = fact |> Map.from_struct() |> Map.drop([:__meta__])
-    Jiyi.Memory.Quarantine.hold("semantic_facts", payload, "compositional_anomaly")
-    Repo.delete(fact)
+
+    Jiyi.Memory.Quarantine.hold_and_delete(
+      "semantic_facts",
+      payload,
+      "compositional_anomaly",
+      fact
+    )
   end
 
-  defp quarantine_offender(%{type: :working, key: key}, %{session_id: session_id}) do
+  defp quarantine_offender(%{type: :working, key: key, value: value}, %{session_id: session_id}) do
+    Jiyi.Memory.Quarantine.hold(
+      "working_memory",
+      %{key: key, value: value},
+      "compositional_anomaly"
+    )
+
     Jiyi.Memory.SessionState.delete(session_id, key)
   end
 
@@ -101,6 +110,8 @@ defmodule Jiyi.Retrieval do
       {:ok, vector} -> vector
       {:error, _} -> nil
     end
+  catch
+    :exit, _ -> nil
   end
 
   defp normalize_request(request) do

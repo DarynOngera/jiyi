@@ -44,3 +44,14 @@ Tracked phases from the design and implementation spec.
 
 ## Remaining Environment Step
 - [ ] Configure Postgres credentials and run `mix ecto.create && mix ecto.migrate`
+
+## Phase 7 – Phase 2 Hardening & MCP Abstraction
+- [x] Fix reference-vector cache (GenServer, Jiyi.Anomaly.ReferenceStore)
+- [x] Fix isolate_offenders O(N²) embedding calls
+- [x] Make quarantine_offender transactional (hold_and_delete/4)
+- [x] Register [:jiyi, :retrieval, :compositional_anomaly] telemetry event
+- [x] Admin HTTP surface for quarantine review
+- [x] Extract Jiyi.MCP.Tools (shared tool logic)
+- [x] Client-side MCP adapter behaviour + AnubisAdapter
+- [x] Server-side mcp_server_module config
+- [x] Provider extension documentation in README

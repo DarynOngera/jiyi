@@ -53,19 +53,8 @@ defmodule Jiyi.API.MCP.ContextAssembleTool do
   def execute(args, frame) do
     args = stringify_keys(args)
 
-    request = %{
-      agent_id: args["agent_id"],
-      session_id: args["session_id"],
-      org_id: Map.get(args, "org_id"),
-      task: args["task"],
-      token_budget: Map.get(args, "token_budget", 4000),
-      memory_scopes:
-        Map.get(args, "memory_scopes", ["agent_private", "session_shared", "org_shared"])
-    }
-
-    case Jiyi.Auth.authenticate_mcp(args["session_token"], request) do
-      {:ok, request} ->
-        result = Jiyi.Retrieval.assemble(request)
+    case Jiyi.MCP.Tools.context_assemble(args) do
+      {:ok, result} ->
         {:reply, Response.tool() |> Response.json(result), frame}
 
       {:error, reason} ->

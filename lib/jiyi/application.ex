@@ -12,7 +12,7 @@ defmodule Jiyi.Application do
       Jiyi.Memory.Supervisor,
       Jiyi.Retrieval.Supervisor,
       Jiyi.API.Supervisor,
-      Jiyi.Anomaly.Watcher
+      Jiyi.Anomaly.Supervisor
     ]
 
     opts = [strategy: :one_for_one, name: Jiyi.Supervisor]

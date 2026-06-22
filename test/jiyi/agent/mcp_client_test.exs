@@ -66,7 +66,7 @@ defmodule Jiyi.Agent.MCPClientTest do
         endpoint: "http://localhost:4002/mcp"
       )
 
-    {:streamable_http, opts} = MCPClient.transport_config(config)
+    {:streamable_http, opts} = Jiyi.Agent.MCP.AnubisAdapter.build_transport(config)
 
     assert opts[:base_url] == "http://localhost:4002"
     assert opts[:mcp_path] == "/mcp"
