@@ -154,6 +154,23 @@ mix test
 mix test test/jiyi_test.exs test/jiyi/api/router_test.exs test/jiyi/retrieval_test.exs
 ```
 
+## Extending MCP providers
+
+Jiyi uses Anubis by default for both the client-side MCP adapter and the server-side MCP server, but both sides are abstracted so a new provider can be added without changing business logic.
+
+1. **Server side**: create `lib/jiyi/api/mcp_server_<provider>.ex` using the new framework's `use` macro. Expose two tools (`context_assemble` and `memory_write`) whose execution handlers delegate to `Jiyi.MCP.Tools.context_assemble/1` and `Jiyi.MCP.Tools.memory_write/1` with string-keyed args maps.
+
+2. **Client side**: create `lib/jiyi/agent/mcp/<provider>_adapter.ex` implementing `@behaviour Jiyi.Agent.MCP.Adapter`. Move the framework-specific `start_link`, `await_ready`, `call_tool`, and transport-building code there.
+
+3. **Wiring**: set the environment variables when starting Jiyi:
+
+   ```bash
+   export JIYI_MCP_SERVER_MODULE=Jiyi.API.MCPServerMyProvider
+   export JIYI_MCP_CLIENT_ADAPTER=Jiyi.Agent.MCP.MyProviderAdapter
+   ```
+
+No existing modules need to change.
+
 ## Architecture
 
 See `TASK.md` for implementation phases and `AGENTS.md` for contributor/agent conventions.

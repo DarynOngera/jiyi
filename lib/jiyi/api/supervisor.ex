@@ -12,9 +12,12 @@ defmodule Jiyi.API.Supervisor do
     http_port = Application.fetch_env!(:jiyi, :http_port)
     mcp_transport = Application.fetch_env!(:jiyi, :mcp_transport)
 
+    mcp_server =
+      Application.get_env(:jiyi, :mcp_server_module, Jiyi.API.MCPServer)
+
     children = [
       {Bandit, plug: Jiyi.API.Router, scheme: :http, port: http_port},
-      {Jiyi.API.MCPServer, transport: mcp_transport}
+      {mcp_server, transport: mcp_transport}
     ]
 
     Supervisor.init(children, strategy: :one_for_one)

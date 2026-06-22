@@ -189,27 +189,12 @@ defmodule Jiyi.Anomaly.Detector do
       {:ok, vector} -> vector
       {:error, _} -> nil
     end
+  catch
+    :exit, _ -> nil
   end
 
   defp reference_vectors do
-    case Application.get_env(:jiyi, :anomaly_injection_reference_vectors) do
-      nil ->
-        phrases = Application.get_env(:jiyi, :anomaly_reference_injections, [])
-
-        vectors =
-          Enum.flat_map(phrases, fn phrase ->
-            case Jiyi.EmbeddingClient.CircuitBreaker.embed(phrase) do
-              {:ok, vector} -> [vector]
-              {:error, _} -> []
-            end
-          end)
-
-        Application.put_env(:jiyi, :anomaly_injection_reference_vectors, vectors)
-        vectors
-
-      vectors ->
-        vectors
-    end
+    Jiyi.Anomaly.ReferenceStore.vectors()
   end
 
   defp cosine_similarity(a, b) do

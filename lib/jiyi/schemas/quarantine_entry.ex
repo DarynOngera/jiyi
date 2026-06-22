@@ -17,6 +17,6 @@ defmodule Jiyi.Schemas.QuarantineEntry do
     |> cast(attrs, [:target_table, :payload, :reason, :status, :created_at, :reviewed_at])
     |> validate_required([:target_table, :payload, :reason, :status, :created_at])
     |> validate_inclusion(:status, ["pending", "promoted", "rejected"])
-    |> validate_inclusion(:target_table, ["episodic_events", "semantic_facts"])
+    |> validate_inclusion(:target_table, ["episodic_events", "semantic_facts", "working_memory"])
   end
 end

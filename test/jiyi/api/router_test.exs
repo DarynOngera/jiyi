@@ -192,6 +192,144 @@ defmodule Jiyi.API.RouterTest do
     end
   end
 
+  describe "admin quarantine routes" do
+    test "GET /admin/quarantine returns 403 for non-admin token" do
+      agent_id = "agent-#{System.unique_integer([:positive])}"
+      token = "agent-key-#{System.unique_integer([:positive])}"
+      insert_agent_key(token, agent_id)
+
+      conn =
+        :get
+        |> Plug.Test.conn("/admin/quarantine")
+        |> Plug.Conn.put_req_header("authorization", "Bearer #{token}")
+        |> Router.call([])
+
+      assert conn.status == 403
+      assert %{"error" => "admin_required"} = Jason.decode!(conn.resp_body)
+    end
+
+    test "POST /admin/quarantine/:id/promote returns 403 for non-admin token" do
+      agent_id = "agent-#{System.unique_integer([:positive])}"
+      token = "agent-key-#{System.unique_integer([:positive])}"
+      insert_agent_key(token, agent_id)
+
+      conn =
+        :post
+        |> Plug.Test.conn("/admin/quarantine/00000000-0000-0000-0000-000000000000/promote")
+        |> Plug.Conn.put_req_header("authorization", "Bearer #{token}")
+        |> Router.call([])
+
+      assert conn.status == 403
+    end
+
+    test "POST /admin/quarantine/:id/reject returns 403 for non-admin token" do
+      agent_id = "agent-#{System.unique_integer([:positive])}"
+      token = "agent-key-#{System.unique_integer([:positive])}"
+      insert_agent_key(token, agent_id)
+
+      conn =
+        :post
+        |> Plug.Test.conn("/admin/quarantine/00000000-0000-0000-0000-000000000000/reject")
+        |> Plug.Conn.put_req_header("authorization", "Bearer #{token}")
+        |> Router.call([])
+
+      assert conn.status == 403
+    end
+
+    test "GET /admin/quarantine lists pending entries for admin" do
+      {:ok, id} =
+        Jiyi.Memory.Quarantine.hold("episodic_events", %{"summary" => "test"}, "test_reason")
+
+      conn =
+        :get
+        |> Plug.Test.conn("/admin/quarantine")
+        |> Plug.Conn.put_req_header("authorization", "Bearer test-token")
+        |> Router.call([])
+
+      assert conn.status == 200
+      assert %{"entries" => entries} = Jason.decode!(conn.resp_body)
+      assert Enum.any?(entries, &(&1["id"] == id))
+    end
+
+    test "POST /admin/quarantine/:id/promote promotes a pending entry" do
+      attrs = %{
+        agent_id: "agent-1",
+        session_id: "session-1",
+        summary: "Suspicious IOC from feed",
+        provenance_source: "feed",
+        ingestion_method: "api",
+        trust_tier: "external_untrusted",
+        scope: "agent_private"
+      }
+
+      {:quarantined, id} = Jiyi.Memory.EpisodicStore.write(attrs)
+
+      conn =
+        :post
+        |> Plug.Test.conn("/admin/quarantine/#{id}/promote")
+        |> Plug.Conn.put_req_header("authorization", "Bearer test-token")
+        |> Router.call([])
+
+      assert conn.status == 200
+      assert %{"status" => "promoted", "id" => ^id} = Jason.decode!(conn.resp_body)
+    end
+
+    test "POST /admin/quarantine/:id/promote returns 409 for already reviewed entry" do
+      attrs = %{
+        agent_id: "agent-1",
+        session_id: "session-1",
+        summary: "Suspicious IOC from feed",
+        provenance_source: "feed",
+        ingestion_method: "api",
+        trust_tier: "external_untrusted",
+        scope: "agent_private"
+      }
+
+      {:quarantined, id} = Jiyi.Memory.EpisodicStore.write(attrs)
+
+      :ok =
+        Jiyi.Memory.Quarantine.reject(id)
+        |> case do
+          :ok -> :ok
+          _ -> :ok
+        end
+
+      conn =
+        :post
+        |> Plug.Test.conn("/admin/quarantine/#{id}/promote")
+        |> Plug.Conn.put_req_header("authorization", "Bearer test-token")
+        |> Router.call([])
+
+      assert conn.status == 409
+      assert %{"error" => "already_reviewed"} = Jason.decode!(conn.resp_body)
+    end
+
+    test "POST /admin/quarantine/:id/reject rejects a pending entry" do
+      {:ok, id} =
+        Jiyi.Memory.Quarantine.hold("episodic_events", %{"summary" => "test"}, "test_reason")
+
+      conn =
+        :post
+        |> Plug.Test.conn("/admin/quarantine/#{id}/reject")
+        |> Plug.Conn.put_req_header("authorization", "Bearer test-token")
+        |> Router.call([])
+
+      assert conn.status == 200
+      assert %{"status" => "rejected", "id" => ^id} = Jason.decode!(conn.resp_body)
+    end
+
+    test "POST /admin/quarantine/:id/reject returns 404 for unknown id" do
+      conn =
+        :post
+        |> Plug.Test.conn("/admin/quarantine/00000000-0000-0000-0000-000000000000/reject")
+        |> Plug.Conn.put_req_header("authorization", "Bearer test-token")
+        |> Router.call([])
+
+      assert conn.status == 404
+      assert %{"error" => "not_found"} = Jason.decode!(conn.resp_body)
+    end
+  end
+
   defp insert_agent_key(token, agent_id) do
     hash = :crypto.hash(:sha256, token) |> Base.encode16(case: :lower)
 

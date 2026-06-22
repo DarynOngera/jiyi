@@ -86,31 +86,15 @@ defmodule Jiyi.API.MCP.MemoryWriteTool do
   def execute(args, frame) do
     args = stringify_keys(args)
 
-    request = %{
-      type: args["type"],
-      agent_id: args["agent_id"],
-      session_id: Map.get(args, "session_id"),
-      org_id: Map.get(args, "org_id"),
-      content: args["content"],
-      provenance: args["provenance"],
-      scope: args["scope"]
-    }
+    case Jiyi.MCP.Tools.memory_write(args) do
+      {:ok, result} ->
+        {:reply, Response.tool() |> Response.json(result), frame}
 
-    case Jiyi.Auth.authenticate_mcp(args["session_token"], request) do
-      {:ok, request} ->
-        case Jiyi.write_memory(request) do
-          {:ok, result} ->
-            {:reply, Response.tool() |> Response.json(result), frame}
+      {:duplicate, id} ->
+        {:reply, Response.tool() |> Response.json(%{status: "duplicate", id: id}), frame}
 
-          {:duplicate, id} ->
-            {:reply, Response.tool() |> Response.json(%{status: "duplicate", id: id}), frame}
-
-          {:quarantined, id} ->
-            {:reply, Response.tool() |> Response.json(%{status: "quarantined", id: id}), frame}
-
-          {:error, reason} ->
-            {:error, Error.protocol(:invalid_request, %{message: to_string(reason)}), frame}
-        end
+      {:quarantined, id} ->
+        {:reply, Response.tool() |> Response.json(%{status: "quarantined", id: id}), frame}
 
       {:error, reason} ->
         {:error, Error.protocol(:invalid_request, %{message: to_string(reason)}), frame}

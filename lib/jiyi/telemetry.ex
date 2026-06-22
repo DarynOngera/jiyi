@@ -11,6 +11,7 @@ defmodule Jiyi.Telemetry do
     [:jiyi, :session, :crash],
     [:jiyi, :session, :restart],
     [:jiyi, :retrieval, :stage],
+    [:jiyi, :retrieval, :compositional_anomaly],
     [:jiyi, :circuit_breaker, :state_change]
   ]
 
