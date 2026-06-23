@@ -37,7 +37,10 @@ defmodule Jiyi.MixProject do
       {:jason, "~> 1.4"},
       {:finch, "~> 0.18"},
       {:ex_doc, "~> 0.34", only: :dev, runtime: false},
-      {:meck, "~> 0.9", only: :test}
+      {:meck, "~> 0.9", only: :test},
+      {:bumblebee, "~> 0.6"},
+      {:nx, "~> 0.9"},
+      {:exla, "~> 0.9"}
     ]
   end
 end

@@ -8,6 +8,17 @@ defmodule Jiyi.Agent.HTTPClientTest do
       start_supervised!(Jiyi.API.Supervisor)
     end
 
+    vector = List.duplicate(0.0, 768)
+    :meck.expect(Jiyi.EmbeddingClient.CircuitBreaker, :embed, fn _ -> {:ok, vector} end)
+
+    on_exit(fn ->
+      try do
+        :meck.unload(Jiyi.EmbeddingClient.CircuitBreaker)
+      rescue
+        _ -> :ok
+      end
+    end)
+
     :ok
   end
 
