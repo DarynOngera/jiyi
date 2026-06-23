@@ -15,6 +15,13 @@ defmodule Jiyi.Application do
       Jiyi.Anomaly.Supervisor
     ]
 
+    children =
+      if Application.fetch_env!(:jiyi, :embedding_server_enabled) do
+        children ++ [Jiyi.EmbeddingServer.Supervisor]
+      else
+        children
+      end
+
     opts = [strategy: :one_for_one, name: Jiyi.Supervisor]
     Supervisor.start_link(children, opts)
   end

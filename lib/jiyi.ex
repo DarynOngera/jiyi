@@ -32,7 +32,9 @@ defmodule Jiyi do
           }
           |> maybe_add_embedding()
 
-        EpisodicStore.write(attrs)
+        with attrs when is_map(attrs) <- attrs do
+          EpisodicStore.write(attrs)
+        end
 
       _ ->
         {:error, :missing_session_id}
@@ -55,7 +57,9 @@ defmodule Jiyi do
       }
       |> maybe_add_embedding()
 
-    SemanticStore.write(attrs)
+    with attrs when is_map(attrs) <- attrs do
+      SemanticStore.write(attrs)
+    end
   end
 
   defp do_write_memory(%{type: "working"} = request) do
@@ -152,8 +156,13 @@ defmodule Jiyi do
     text = extract_text(attrs)
 
     case Jiyi.EmbeddingClient.CircuitBreaker.embed(text) do
-      {:ok, vector} -> Map.put(attrs, :embedding, vector)
-      {:error, _} -> attrs
+      {:ok, vector} ->
+        Map.put(attrs, :embedding, vector)
+
+      {:error, reason} ->
+        require Logger
+        Logger.warning("Embedding generation failed: #{inspect(reason)} for text: #{text}")
+        {:error, :embedding_failed}
     end
   end
 

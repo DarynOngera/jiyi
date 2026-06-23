@@ -8,8 +8,19 @@ defmodule Jiyi.Agent.MCPClientTest do
       start_supervised!(Jiyi.API.Supervisor)
     end
 
+    vector = List.duplicate(0.0, 768)
+    :meck.expect(Jiyi.EmbeddingClient.CircuitBreaker, :embed, fn _ -> {:ok, vector} end)
+
     agent_id = "mcp-agent-#{System.unique_integer([:positive])}"
     {:ok, token} = issue_mcp_token(agent_id)
+
+    on_exit(fn ->
+      try do
+        :meck.unload(Jiyi.EmbeddingClient.CircuitBreaker)
+      rescue
+        _ -> :ok
+      end
+    end)
 
     %{agent_id: agent_id, token: token}
   end

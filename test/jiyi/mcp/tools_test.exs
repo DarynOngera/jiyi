@@ -3,6 +3,21 @@ defmodule Jiyi.MCP.ToolsTest do
 
   alias Jiyi.MCP.Tools
 
+  setup do
+    vector = List.duplicate(0.0, 768)
+    :meck.expect(Jiyi.EmbeddingClient.CircuitBreaker, :embed, fn _ -> {:ok, vector} end)
+
+    on_exit(fn ->
+      try do
+        :meck.unload(Jiyi.EmbeddingClient.CircuitBreaker)
+      rescue
+        _ -> :ok
+      end
+    end)
+
+    :ok
+  end
+
   test "context_assemble/1 with valid token returns assembled context" do
     agent_id = "agent-#{System.unique_integer([:positive])}"
     {:ok, token} = Jiyi.Auth.issue_mcp_token(agent_id)

@@ -43,6 +43,18 @@ export JIYI_API_TOKEN="dev-token-change-me"
 mix run --no-halt
 ```
 
+### Local embedding server (optional)
+
+Jiyi can optionally bundle its own embedding server using `BAAI/bge-base-en-v1.5` via Bumblebee. It is **opt-in** because loading a transformer model adds ~400 MB download, ~500 MB–1 GB RAM, and noticeable CPU usage. Enable it when you do not have a separate embedding service:
+
+```bash
+export JIYI_EMBEDDING_SERVER_ENABLED=true
+export JIYI_EMBEDDING_ENDPOINT=http://localhost:8001/embed
+mix run --no-halt
+```
+
+When enabled, the server listens on `JIYI_EMBEDDING_SERVER_PORT` (default `8001`) and exposes `POST /embed`. Jiyi's circuit breaker will use it automatically once `JIYI_EMBEDDING_ENDPOINT` points there.
+
 Write a memory and read it back:
 
 ```bash
@@ -88,7 +100,10 @@ With `streamable_http`, point an MCP client at `http://localhost:4000/mcp`.
 | `JIYI_DB_NAME` | `jiyi_dev` / `jiyi_test` | Database name |
 | `JIYI_HTTP_PORT` | `4000` | HTTP API port |
 | `JIYI_API_TOKEN` | `dev-token-change-me` | Shared admin bearer token for HTTP endpoints |
-| `JIYI_EMBEDDING_ENDPOINT` | `http://localhost:8000/embed` | Local embedding service URL |
+| `JIYI_EMBEDDING_ENDPOINT` | `http://localhost:8000/embed` (or `http://localhost:8001/embed` when the local server is enabled) | Embedding service URL |
+| `JIYI_EMBEDDING_SERVER_ENABLED` | `false` | Start the bundled BGE embedding server |
+| `JIYI_EMBEDDING_SERVER_PORT` | `8001` | Port for the bundled embedding server |
+| `JIYI_EMBEDDING_MODEL_REPO` | `BAAI/bge-base-en-v1.5` | HuggingFace model repo |
 | `JIYI_MCP_TRANSPORT` | `stdio` | MCP transport: `stdio` or `streamable_http` |
 | `JIYI_MCP_HTTP_PORT` | `4001` | Dedicated MCP streamable HTTP port when enabled |
 
