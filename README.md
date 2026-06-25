@@ -21,13 +21,15 @@ It exposes both an HTTP API (`Plug` + `Bandit`) and an MCP server (`anubis_mcp`)
 
 ## Setup
 
+Copy `.env.example` to `.env` and fill in your Postgres credentials and any optional flags. The dev and test config files automatically load `.env` at startup:
+
+```bash
+cp .env.example .env
+# edit .env
+```
+
 ```bash
 mix deps.get
-
-# Configure Postgres credentials, then:
-export JIYI_DB_USER="postgres"
-export JIYI_DB_PASSWORD="..."
-export JIYI_DB_HOST="localhost"
 mix ecto.create
 mix ecto.migrate
 ```
