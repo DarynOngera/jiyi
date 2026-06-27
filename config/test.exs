@@ -9,7 +9,7 @@ config :jiyi, Jiyi.Repo,
   pool_size: System.schedulers_online() * 2,
   show_sensitive_data_on_connection_error: true
 
-config :jiyi, :http_port, 4001
+config :jiyi, :http_port, String.to_integer(System.get_env("JIYI_TEST_HTTP_PORT") || "4001")
 config :jiyi, :api_token, "test-token"
 config :jiyi, :mcp_transport, {:streamable_http, port: 4003}
 

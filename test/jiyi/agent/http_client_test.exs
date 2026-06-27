@@ -28,7 +28,7 @@ defmodule Jiyi.Agent.HTTPClientTest do
         agent_id: "http-agent",
         session_id: "http-session",
         api_key: "test-token",
-        endpoint: "http://localhost:4001",
+        endpoint: http_endpoint(),
         transport: :http
       )
 
@@ -65,7 +65,7 @@ defmodule Jiyi.Agent.HTTPClientTest do
     {:ok, %{status: 201, body: body}} =
       Finch.build(
         :post,
-        "http://localhost:4001/admin/agents",
+        "#{http_endpoint()}/admin/agents",
         [{"content-type", "application/json"}, {"authorization", "Bearer test-token"}],
         Jason.encode!(%{agent_id: agent_id})
       )
@@ -78,7 +78,7 @@ defmodule Jiyi.Agent.HTTPClientTest do
         agent_id: agent_id,
         session_id: "http-session",
         api_key: api_key,
-        endpoint: "http://localhost:4001",
+        endpoint: http_endpoint(),
         transport: :http
       )
 
@@ -95,5 +95,10 @@ defmodule Jiyi.Agent.HTTPClientTest do
                },
                "scope" => "agent_private"
              })
+  end
+
+  defp http_endpoint do
+    port = Application.fetch_env!(:jiyi, :http_port)
+    "http://localhost:#{port}"
   end
 end

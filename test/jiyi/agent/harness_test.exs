@@ -147,7 +147,7 @@ defmodule Jiyi.Agent.HarnessTest do
         agent_id: "harness-agent",
         session_id: "harness-session",
         api_key: "test-token",
-        endpoint: "http://localhost:4001",
+        endpoint: http_endpoint(),
         transport: :http,
         llm: %{module: FakeLLM}
       )
@@ -188,7 +188,7 @@ defmodule Jiyi.Agent.HarnessTest do
         agent_id: "harness-agent",
         session_id: "harness-session",
         api_key: "test-token",
-        endpoint: "http://localhost:4001",
+        endpoint: http_endpoint(),
         transport: :http,
         llm: %{module: FakeLLM, behavior: :echo, calls: calls}
       )
@@ -231,7 +231,7 @@ defmodule Jiyi.Agent.HarnessTest do
         agent_id: "harness-agent",
         session_id: "harness-session",
         api_key: "test-token",
-        endpoint: "http://localhost:4001",
+        endpoint: http_endpoint(),
         transport: :http,
         llm: %{module: FakeLLM, behavior: :tool_unknown}
       )
@@ -278,7 +278,7 @@ defmodule Jiyi.Agent.HarnessTest do
           agent_id: "harness-agent",
           session_id: "harness-session",
           api_key: "test-token",
-          endpoint: "http://localhost:4001",
+          endpoint: http_endpoint(),
           transport: :http,
           llm: %{module: FakeLLM, behavior: behavior}
         )
@@ -318,7 +318,7 @@ defmodule Jiyi.Agent.HarnessTest do
         agent_id: "harness-agent",
         session_id: "harness-session",
         api_key: "test-token",
-        endpoint: "http://localhost:4001",
+        endpoint: http_endpoint(),
         transport: :http,
         llm: %{module: FakeLLM, behavior: :echo}
       )
@@ -361,7 +361,7 @@ defmodule Jiyi.Agent.HarnessTest do
         agent_id: "harness-agent",
         session_id: "harness-session",
         api_key: "test-token",
-        endpoint: "http://localhost:4001",
+        endpoint: http_endpoint(),
         transport: :http,
         llm: %{module: FakeLLM, behavior: :echo}
       )
@@ -407,7 +407,7 @@ defmodule Jiyi.Agent.HarnessTest do
         agent_id: "harness-agent",
         session_id: "harness-session",
         api_key: "test-token",
-        endpoint: "http://localhost:4001",
+        endpoint: http_endpoint(),
         transport: :http,
         llm: %{module: FakeLLM, behavior: :memory_tool}
       )
@@ -426,5 +426,10 @@ defmodule Jiyi.Agent.HarnessTest do
       |> Enum.map(fn {:context_assemble, task} -> task end)
 
     assert "project uses harness" in assemble_tasks
+  end
+
+  defp http_endpoint do
+    port = Application.fetch_env!(:jiyi, :http_port)
+    "http://localhost:#{port}"
   end
 end
