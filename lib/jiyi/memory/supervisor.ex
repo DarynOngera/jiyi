@@ -10,10 +10,7 @@ defmodule Jiyi.Memory.Supervisor do
   @impl true
   def init(_init_arg) do
     children = [
-      {Jiyi.Memory.SessionSupervisor, []},
-      Jiyi.Memory.EpisodicStore,
-      Jiyi.Memory.SemanticStore,
-      Jiyi.Memory.Quarantine
+      {Jiyi.Memory.SessionSupervisor, []}
     ]
 
     Supervisor.init(children, strategy: :one_for_one)

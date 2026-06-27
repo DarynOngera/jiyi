@@ -34,7 +34,7 @@ defmodule Jiyi.Agent.MCPClientTest do
         agent_id: agent_id,
         session_id: "mcp-session",
         api_key: token,
-        endpoint: "http://localhost:4001/mcp",
+        endpoint: "#{http_endpoint()}/mcp",
         transport: :mcp_http
       )
 
@@ -84,7 +84,7 @@ defmodule Jiyi.Agent.MCPClientTest do
   end
 
   defp issue_mcp_token(agent_id) do
-    url = "http://localhost:4001/auth/mcp-token"
+    url = "#{http_endpoint()}/auth/mcp-token"
 
     headers = [
       {"content-type", "application/json"},
@@ -98,5 +98,10 @@ defmodule Jiyi.Agent.MCPClientTest do
 
     {:ok, %{"token" => token}} = Jason.decode(resp)
     {:ok, token}
+  end
+
+  defp http_endpoint do
+    port = Application.fetch_env!(:jiyi, :http_port)
+    "http://localhost:#{port}"
   end
 end

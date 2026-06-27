@@ -1,42 +1,19 @@
 defmodule Jiyi.Memory.EpisodicStore do
   @moduledoc """
-  GenServer fronting Ecto for episodic event writes and queries.
+  Plain module for episodic event writes and queries.
   """
-
-  use GenServer
 
   import Ecto.Query
 
   alias Jiyi.Repo
   alias Jiyi.Schemas.EpisodicEvent
 
-  def start_link(init_arg) do
-    GenServer.start_link(__MODULE__, init_arg, name: __MODULE__)
-  end
-
   def write(attrs, opts \\ []) do
-    GenServer.call(__MODULE__, {:write, attrs, opts})
+    write_logic(attrs, opts)
   end
 
   def query(filters, opts \\ []) do
-    GenServer.call(__MODULE__, {:query, filters, opts})
-  end
-
-  @impl true
-  def init(_init_arg) do
-    Process.set_label(__MODULE__)
-    {:ok, %{}}
-  end
-
-  @impl true
-  def handle_call({:write, attrs, opts}, _from, state) do
-    result = write_logic(attrs, opts)
-    {:reply, result, state}
-  end
-
-  def handle_call({:query, filters, opts}, _from, state) do
-    events = do_query(filters, opts)
-    {:reply, events, state}
+    do_query(filters, opts)
   end
 
   def write_logic(attrs, opts \\ []) do

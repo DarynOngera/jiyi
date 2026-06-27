@@ -1,51 +1,23 @@
 defmodule Jiyi.Memory.SemanticStore do
   @moduledoc """
-  GenServer fronting Ecto for semantic fact writes, queries, and invalidation.
+  Plain module for semantic fact writes, queries, and invalidation.
   """
-
-  use GenServer
 
   import Ecto.Query
 
   alias Jiyi.Repo
   alias Jiyi.Schemas.SemanticFact
 
-  def start_link(init_arg) do
-    GenServer.start_link(__MODULE__, init_arg, name: __MODULE__)
-  end
-
   def write(attrs, opts \\ []) do
-    GenServer.call(__MODULE__, {:write, attrs, opts})
+    write_logic(attrs, opts)
   end
 
   def query(filters, opts \\ []) do
-    GenServer.call(__MODULE__, {:query, filters, opts})
+    do_query(filters, opts)
   end
 
   def invalidate(fact_id, at \\ DateTime.utc_now()) do
-    GenServer.call(__MODULE__, {:invalidate, fact_id, at})
-  end
-
-  @impl true
-  def init(_init_arg) do
-    Process.set_label(__MODULE__)
-    {:ok, %{}}
-  end
-
-  @impl true
-  def handle_call({:write, attrs, opts}, _from, state) do
-    result = write_logic(attrs, opts)
-    {:reply, result, state}
-  end
-
-  def handle_call({:query, filters, opts}, _from, state) do
-    facts = do_query(filters, opts)
-    {:reply, facts, state}
-  end
-
-  def handle_call({:invalidate, fact_id, at}, _from, state) do
-    result = do_invalidate(fact_id, at)
-    {:reply, result, state}
+    do_invalidate(fact_id, at)
   end
 
   def write_logic(attrs, opts \\ []) do
