@@ -191,3 +191,8 @@ No existing modules need to change.
 ## Architecture
 
 See `TASK.md` for implementation phases and `AGENTS.md` for contributor/agent conventions.
+
+## Docs 
+[embedding wiki](docs/EMBEDDING.md)
+
+
