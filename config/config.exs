@@ -9,8 +9,15 @@ if File.exists?(".env") do
 
     if line != "" and not String.starts_with?(line, "#") do
       case String.split(line, "=", parts: 2) do
-        [key, value] -> System.put_env(String.trim(key), String.trim(value))
-        _ -> :ok
+        [key, value] ->
+          key = String.trim(key)
+
+          if System.get_env(key) == nil do
+            System.put_env(key, String.trim(value))
+          end
+
+        _ ->
+          :ok
       end
     end
   end)

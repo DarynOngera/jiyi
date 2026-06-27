@@ -194,5 +194,6 @@ See `TASK.md` for implementation phases and `AGENTS.md` for contributor/agent co
 
 ## Docs 
 [embedding wiki](docs/EMBEDDING.md)
-
+[retrieval](docs/RETRIEVAL.md)
+[ranking matrix](docs/RANKING_MATRIX.md)
 
